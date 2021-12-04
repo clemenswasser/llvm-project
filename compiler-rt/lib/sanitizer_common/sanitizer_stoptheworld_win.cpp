@@ -26,41 +26,52 @@
 
 namespace __sanitizer {
 
-class SuspendedThreadsListWindows final : public SuspendedThreadsList {
- public:
-  SuspendedThreadsListWindows() { thread_ids_.reserve(1024); }
+struct SuspendedThreadsListWindows final : public SuspendedThreadsList {
+  InternalMmapVector<HANDLE> threadHandles;
+  InternalMmapVector<DWORD> threadIds;
+
+  SuspendedThreadsListWindows() : threadHandles(1024), threadIds(1024) {}
+
+  PtraceRegistersStatus GetRegistersAndSP(uptr index,
+                                          InternalMmapVector<uptr> *buffer,
+                                          uptr *sp) const override;
 
   tid_t GetThreadID(uptr index) const override;
   uptr ThreadCount() const override;
-  bool ContainsTid(tid_t thread_id) const;
-  void Append(tid_t tid);
-
- private:
-  InternalMmapVector<tid_t> thread_ids_;
 };
 
+PtraceRegistersStatus SuspendedThreadsListWindows::GetRegistersAndSP(
+    uptr index, InternalMmapVector<uptr> *buffer, uptr *sp) const {
+  CHECK_LT(index, threadHandles.size());
+
+  CONTEXT thread_context;
+  thread_context.ContextFlags = CONTEXT_ALL;
+  CHECK(GetThreadContext(threadHandles[index], &thread_context));
+
+  buffer->resize(RoundUpTo(sizeof(thread_context), sizeof(uptr)) / sizeof(uptr));
+  internal_memcpy(buffer->data(), &thread_context, sizeof(thread_context));
+
+  *sp = thread_context.Rsp;
+
+  return REGISTERS_AVAILABLE;
+}
+
 tid_t SuspendedThreadsListWindows::GetThreadID(uptr index) const {
-  CHECK_LT(index, thread_ids_.size());
-  return thread_ids_[index];
+  CHECK_LT(index, threadIds.size());
+  return threadIds[index];
 }
 
 uptr SuspendedThreadsListWindows::ThreadCount() const {
-  return thread_ids_.size();
+  return threadIds.size();
 }
 
-bool SuspendedThreadsListWindows::ContainsTid(tid_t thread_id) const {
-  for (uptr i = 0; i < thread_ids_.size(); i++) {
-    if (thread_ids_[i] == thread_id)
-      return true;
-  }
-  return false;
-}
+struct RunThreadArgs {
+  StopTheWorldCallback callback;
+  void *argument;
+};
 
-void SuspendedThreadsListWindows::Append(tid_t tid) {
-  thread_ids_.push_back(tid);
-}
-
-void StopTheWorld(StopTheWorldCallback callback, void *argument) {
+DWORD WINAPI RunThread(void *argument) {
+  RunThreadArgs *run_args = (RunThreadArgs *)argument;
   const HANDLE threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
 
   CHECK(threads != INVALID_HANDLE_VALUE);
@@ -69,7 +80,6 @@ void StopTheWorld(StopTheWorldCallback callback, void *argument) {
   const DWORD this_process = GetCurrentProcessId();
 
   SuspendedThreadsListWindows suspended_threads_list;
-  InternalMmapVector<HANDLE> suspended_threads_handles;
 
   THREADENTRY32 thread_entry;
   thread_entry.dwSize = sizeof(thread_entry);
@@ -87,22 +97,36 @@ void StopTheWorld(StopTheWorldCallback callback, void *argument) {
         CHECK(thread);
         SuspendThread(thread);
 
-        const DWORD thread_id = GetThreadId(thread);
-        CHECK(thread_id);
-        suspended_threads_list.Append(thread_id);
+        suspended_threads_list.threadIds.push_back(thread_entry.th32ThreadID);
+        suspended_threads_list.threadHandles.push_back(thread);
       }
       thread_entry.dwSize = sizeof(thread_entry);
     } while (Thread32Next(threads, &thread_entry));
   }
 
-  callback(suspended_threads_list, argument);
+  run_args->callback(suspended_threads_list, run_args->argument);
 
-  for(const HANDLE suspended_thread_handle : suspended_threads_handles) {
+  for (const auto suspended_thread_handle :
+       suspended_threads_list.threadHandles) {
     ResumeThread(suspended_thread_handle);
     CloseHandle(suspended_thread_handle);
   }
 
   CloseHandle(threads);
+
+  return 0;
+}
+
+void StopTheWorld(StopTheWorldCallback callback, void *argument) {
+  struct RunThreadArgs arg = {callback, argument};
+  DWORD trace_thread_id;
+
+  auto trace_thread =
+      CreateThread(nullptr, 0, RunThread, &arg, 0, &trace_thread_id);
+  CHECK(trace_thread);
+
+  WaitForSingleObject(trace_thread, INFINITE);
+  CloseHandle(trace_thread);
 }
 
 }  // namespace __sanitizer
