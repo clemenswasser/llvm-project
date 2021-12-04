@@ -95,8 +95,6 @@ AllocatorCache *GetAllocatorCache() { return &allocator_cache; }
 
 }  // namespace __lsan
 
-#endif  // SANITIZER_WINDOWS
-
 int lsan_win_init() {
   __lsan_init();
   return 0;
@@ -104,3 +102,5 @@ int lsan_win_init() {
 
 #pragma section(".CRT$XIB", long, read)
 __declspec(allocate(".CRT$XIB")) int (*__lsan_preinit)() = lsan_win_init;
+
+#endif  // SANITIZER_WINDOWS
