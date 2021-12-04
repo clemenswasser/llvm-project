@@ -30,7 +30,6 @@ struct OnStartedArgs {
   uptr cache_end;
   uptr tls_begin;
   uptr tls_end;
-  DTLS *dtls;
 };
 
 void ThreadContext::OnStarted(void *arg) {
@@ -50,7 +49,6 @@ void ThreadStart(u32 tid, tid_t os_id, ThreadType thread_type) {
   args.stack_end = args.stack_begin + stack_size;
   args.tls_end = args.tls_begin + tls_size;
   GetAllocatorCacheRange(&args.cache_begin, &args.cache_end);
-  args.dtls = DTLS_Get();
   ThreadContextLsanBase::ThreadStart(tid, os_id, thread_type, &args);
 }
 
@@ -65,6 +63,7 @@ bool GetThreadRangesLocked(tid_t os_id, uptr *stack_begin, uptr *stack_end,
   *stack_end = context->stack_end();
   *cache_begin = context->cache_begin();
   *cache_end = context->cache_end();
+  *dtls = 0;
   return true;
 }
 
