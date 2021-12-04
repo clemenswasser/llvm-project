@@ -16,13 +16,13 @@
 
 #if SANITIZER_WINDOWS
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
 
-#include <tlhelp32.h>
+// windows.h needs to be included before tlhelp32.h
+#  include <tlhelp32.h>
 
-#include "sanitizer_stoptheworld.h"
-
+#  include "sanitizer_stoptheworld.h"
 
 namespace __sanitizer {
 
@@ -51,7 +51,8 @@ PtraceRegistersStatus SuspendedThreadsListWindows::GetRegistersAndSP(
   thread_context.ContextFlags = CONTEXT_ALL;
   CHECK(GetThreadContext(threadHandles[index], &thread_context));
 
-  buffer->resize(RoundUpTo(sizeof(thread_context), sizeof(uptr)) / sizeof(uptr));
+  buffer->resize(RoundUpTo(sizeof(thread_context), sizeof(uptr)) /
+                 sizeof(uptr));
   internal_memcpy(buffer->data(), &thread_context, sizeof(thread_context));
 
   *sp = thread_context.Rsp;

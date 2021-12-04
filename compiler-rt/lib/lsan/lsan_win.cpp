@@ -14,10 +14,10 @@
 #include "sanitizer_common/sanitizer_platform.h"
 
 #if SANITIZER_WINDOWS
-#include "lsan.h"
-#include "lsan_allocator.h"
-#include "sanitizer_common/sanitizer_stacktrace.h"
-#include "sanitizer_common/sanitizer_tls_get_addr.h"
+#  include "lsan.h"
+#  include "lsan_allocator.h"
+#  include "sanitizer_common/sanitizer_stacktrace.h"
+#  include "sanitizer_common/sanitizer_tls_get_addr.h"
 
 namespace __lsan {
 
@@ -100,7 +100,7 @@ int lsan_win_init() {
   return 0;
 }
 
-#pragma section(".CRT$XIB", long, read)
+#  pragma section(".CRT$XIB", long, read)
 __declspec(allocate(".CRT$XIB")) int (*__lsan_preinit)() = lsan_win_init;
 
 #endif  // SANITIZER_WINDOWS

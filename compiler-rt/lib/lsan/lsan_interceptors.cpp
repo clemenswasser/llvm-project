@@ -326,7 +326,8 @@ INTERCEPTOR(void, _ZdaPvRKSt9nothrow_t, void *ptr, std::nothrow_t const&)
 
 ///// Thread initialization and finalization. /////
 
-#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_FUCHSIA && !SANITIZER_WINDOWS
+#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_FUCHSIA && \
+    !SANITIZER_WINDOWS
 static unsigned g_thread_finalize_key;
 
 static void thread_finalize(void *v) {
@@ -538,12 +539,12 @@ void InitializeInterceptors() {
 
   LSAN_MAYBE_INTERCEPT_STRERROR;
 
-#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD
+#  if !SANITIZER_NETBSD && !SANITIZER_FREEBSD
   if (pthread_key_create(&g_thread_finalize_key, &thread_finalize)) {
     Report("LeakSanitizer: failed to create thread key.\n");
     Die();
   }
-#endif
+#  endif
 
 #endif  // !SANITIZER_FUCHSIA
 }

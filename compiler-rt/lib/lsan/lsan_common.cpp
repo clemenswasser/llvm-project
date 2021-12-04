@@ -408,7 +408,7 @@ void ScanRootRegion(Frontier *frontier, const RootRegion &root_region,
                          kReachable);
 }
 
-#if !SANITIZER_WINDOWS
+#  if !SANITIZER_WINDOWS
 static void ProcessRootRegion(Frontier *frontier,
                               const RootRegion &root_region) {
   MemoryMappingLayout proc_maps(/*cache_enabled*/ true);
@@ -425,7 +425,7 @@ static void ProcessRootRegions(Frontier *frontier) {
   for (uptr i = 0; i < root_regions.size(); i++)
     ProcessRootRegion(frontier, root_regions[i]);
 }
-#endif
+#  endif
 
 static void FloodFillTag(Frontier *frontier, ChunkTag tag) {
   while (frontier->size()) {
@@ -553,9 +553,9 @@ static void ClassifyAllChunks(SuspendedThreadsList const &suspended_threads,
   ForEachChunk(CollectIgnoredCb, frontier);
   ProcessGlobalRegions(frontier);
   ProcessThreads(suspended_threads, frontier);
-  #if !SANITIZER_WINDOWS
+#  if !SANITIZER_WINDOWS
   ProcessRootRegions(frontier);
-  #endif
+#  endif
   FloodFillTag(frontier, kReachable);
 
   CHECK_EQ(0, frontier->size());

@@ -18,7 +18,7 @@
 #include "sanitizer_common/sanitizer_platform.h"
 
 #if !SANITIZER_WINDOWS
-#error "lsan_win.h is used only on Windows systems (SANITIZER_WINDOWS)"
+#  error "lsan_win.h is used only on Windows systems (SANITIZER_WINDOWS)"
 #endif
 
 namespace __sanitizer {

@@ -11,14 +11,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sanitizer_common/sanitizer_platform.h"
-#include "sanitizer_common/sanitizer_libc.h"
 #include "lsan_common.h"
+#include "sanitizer_common/sanitizer_libc.h"
+#include "sanitizer_common/sanitizer_platform.h"
 
 #if CAN_SANITIZE_LEAKS && SANITIZER_WINDOWS
 
-#include "sanitizer_common/sanitizer_allocator_internal.h"
-#include "lsan_allocator.h"
+#  include "lsan_allocator.h"
+#  include "sanitizer_common/sanitizer_allocator_internal.h"
 
 namespace __lsan {
 
@@ -50,6 +50,6 @@ void ProcessPlatformSpecificAllocations(Frontier *frontier) {}
 
 LoadedModule *GetLinker() { return nullptr; }
 
-} // namespace __lsan
+}  // namespace __lsan
 
-#endif // CAN_SANITIZE_LEAKS && SANITIZER_WINDOWS
+#endif  // CAN_SANITIZE_LEAKS && SANITIZER_WINDOWS

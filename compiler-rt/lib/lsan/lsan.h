@@ -17,7 +17,7 @@
 #elif SANITIZER_FUCHSIA
 #include "lsan_fuchsia.h"
 #elif SANITIZER_WINDOWS
-#include "lsan_win.h"
+#  include "lsan_win.h"
 #endif
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_stacktrace.h"
