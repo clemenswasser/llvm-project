@@ -501,7 +501,13 @@ void InitializeInterceptors() {
   // Fuchsia doesn't use interceptors that require any setup.
 
 #if SANITIZER_WINDOWS
-  // TODO
+  INTERCEPT_FUNCTION(malloc);
+  INTERCEPT_FUNCTION(free);
+  INTERCEPT_FUNCTION(calloc);
+  INTERCEPT_FUNCTION(realloc);
+  LSAN_MAYBE_INTERCEPT_MEMALIGN;
+  INTERCEPT_FUNCTION(valloc);
+  LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC;
 #elif !SANITIZER_FUCHSIA
   InitializeSignalInterceptors();
 
