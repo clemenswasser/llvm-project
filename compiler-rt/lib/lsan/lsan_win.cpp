@@ -85,6 +85,23 @@ void LsanOnDeadlySignal(int signo, void *siginfo, void *context) {
                      nullptr);
 }
 
+void ReplaceSystemMalloc() {}
+
+static THREADLOCAL u32 current_thread_tid = kInvalidTid;
+u32 GetCurrentThread() { return current_thread_tid; }
+void SetCurrentThread(u32 tid) { current_thread_tid = tid; }
+
+static THREADLOCAL AllocatorCache allocator_cache;
+AllocatorCache *GetAllocatorCache() { return &allocator_cache; }
+
 }  // namespace __lsan
 
-#endif  // SANITIZER_POSIX
+#endif  // SANITIZER_WINDOWS
+
+int lsan_win_init() {
+  __lsan_init();
+  return 0;
+}
+
+#pragma section(".CRT$XIB", long, read)
+__declspec(allocate(".CRT$XIB")) int (*__lsan_preinit)() = lsan_win_init;
