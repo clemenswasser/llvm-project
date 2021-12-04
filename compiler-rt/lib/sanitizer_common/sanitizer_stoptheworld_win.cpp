@@ -30,7 +30,10 @@ struct SuspendedThreadsListWindows final : public SuspendedThreadsList {
   InternalMmapVector<HANDLE> threadHandles;
   InternalMmapVector<DWORD> threadIds;
 
-  SuspendedThreadsListWindows() : threadHandles(1024), threadIds(1024) {}
+  SuspendedThreadsListWindows() {
+    threadIds.reserve(1024);
+    threadHandles.reserve(1024);
+  }
 
   PtraceRegistersStatus GetRegistersAndSP(uptr index,
                                           InternalMmapVector<uptr> *buffer,
