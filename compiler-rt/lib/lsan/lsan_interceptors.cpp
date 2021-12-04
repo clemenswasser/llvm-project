@@ -326,7 +326,7 @@ INTERCEPTOR(void, _ZdaPvRKSt9nothrow_t, void *ptr, std::nothrow_t const&)
 
 ///// Thread initialization and finalization. /////
 
-#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_FUCHSIA
+#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_FUCHSIA && !SANITIZER_WINDOWS
 static unsigned g_thread_finalize_key;
 
 static void thread_finalize(void *v) {
@@ -499,7 +499,10 @@ namespace __lsan {
 
 void InitializeInterceptors() {
   // Fuchsia doesn't use interceptors that require any setup.
-#if !SANITIZER_FUCHSIA
+
+#if SANITIZER_WINDOWS
+  // TODO
+#elif !SANITIZER_FUCHSIA
   InitializeSignalInterceptors();
 
   INTERCEPT_FUNCTION(malloc);
