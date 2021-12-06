@@ -506,9 +506,6 @@ void InitializeInterceptors() {
   INTERCEPT_FUNCTION(free);
   INTERCEPT_FUNCTION(calloc);
   INTERCEPT_FUNCTION(realloc);
-  LSAN_MAYBE_INTERCEPT_MEMALIGN;
-  INTERCEPT_FUNCTION(valloc);
-  LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC;
 #elif !SANITIZER_FUCHSIA
   InitializeSignalInterceptors();
 
