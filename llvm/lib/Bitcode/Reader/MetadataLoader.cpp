@@ -2329,6 +2329,10 @@ MetadataLoader::MetadataLoader(BitstreamCursor &Stream, Module &TheModule,
     : Pimpl(std::make_unique<MetadataLoaderImpl>(
           Stream, TheModule, ValueList, std::move(getTypeByID), IsImporting)) {}
 
+Error MetadataLoader::parseModuleMetadata() { return parseMetadata(true); }
+
+Error MetadataLoader::parseFunctionMetadata() { return parseMetadata(false); }
+
 Error MetadataLoader::parseMetadata(bool ModuleLevel) {
   return Pimpl->parseMetadata(ModuleLevel);
 }

@@ -13,8 +13,6 @@
 #ifndef LLVM_LIB_BITCODE_READER_METADATALOADER_H
 #define LLVM_LIB_BITCODE_READER_METADATALOADER_H
 
-#include "llvm/Support/Error.h"
-
 #include <functional>
 #include <memory>
 
@@ -27,6 +25,7 @@ class Instruction;
 class Metadata;
 class Module;
 class Type;
+class Error;
 template <typename T> class ArrayRef;
 
 /// Helper class that handles loading Metadatas and keeping them available.
@@ -44,10 +43,10 @@ public:
   MetadataLoader(MetadataLoader &&);
 
   // Parse a module metadata block
-  Error parseModuleMetadata() { return parseMetadata(true); }
+  Error parseModuleMetadata();
 
   // Parse a function metadata block
-  Error parseFunctionMetadata() { return parseMetadata(false); }
+  Error parseFunctionMetadata();
 
   /// Set the mode to strip TBAA metadata on load.
   void setStripTBAA(bool StripTBAA = true);
