@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/PrintPasses.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/CommandLine.h"
 #include <unordered_set>
 

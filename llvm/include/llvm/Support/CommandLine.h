@@ -19,7 +19,6 @@
 #ifndef LLVM_SUPPORT_COMMANDLINE_H
 #define LLVM_SUPPORT_COMMANDLINE_H
 
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
@@ -42,6 +41,8 @@
 #include <vector>
 
 namespace llvm {
+
+template <typename T> class ArrayRef;
 
 namespace vfs {
 class FileSystem;
