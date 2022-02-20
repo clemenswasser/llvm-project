@@ -14,7 +14,6 @@
 #ifndef LLVM_LIB_TARGET_X86_X86ISELLOWERING_H
 #define LLVM_LIB_TARGET_X86_X86ISELLOWERING_H
 
-#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
@@ -1612,10 +1611,7 @@ namespace llvm {
                         const SmallVectorImpl<SDValue> &OutVals,
                         const SDLoc &dl, SelectionDAG &DAG) const override;
 
-    bool supportSplitCSR(MachineFunction *MF) const override {
-      return MF->getFunction().getCallingConv() == CallingConv::CXX_FAST_TLS &&
-          MF->getFunction().hasFnAttribute(Attribute::NoUnwind);
-    }
+    bool supportSplitCSR(MachineFunction *MF) const override;
     void initializeSplitCSR(MachineBasicBlock *Entry) const override;
     void insertCopiesSplitCSR(
       MachineBasicBlock *Entry,

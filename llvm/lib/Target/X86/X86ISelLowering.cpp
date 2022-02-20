@@ -55379,6 +55379,11 @@ bool X86TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
   return OptSize && !VT.isVector();
 }
 
+bool X86TargetLowering::supportSplitCSR(MachineFunction *MF) const {
+  return MF->getFunction().getCallingConv() == CallingConv::CXX_FAST_TLS &&
+         MF->getFunction().hasFnAttribute(Attribute::NoUnwind);
+}
+
 void X86TargetLowering::initializeSplitCSR(MachineBasicBlock *Entry) const {
   if (!Subtarget.is64Bit())
     return;
