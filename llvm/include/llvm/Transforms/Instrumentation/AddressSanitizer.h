@@ -13,7 +13,6 @@
 #ifndef LLVM_TRANSFORMS_INSTRUMENTATION_ADDRESSSANITIZER_H
 #define LLVM_TRANSFORMS_INSTRUMENTATION_ADDRESSSANITIZER_H
 
-#include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"

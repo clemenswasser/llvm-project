@@ -37,41 +37,15 @@ namespace objcarc {
 /// so if it's such a call and the return value has users, replace them with the
 /// argument value.
 ///
-static inline void EraseInstruction(Instruction *CI) {
-  Value *OldArg = cast<CallInst>(CI)->getArgOperand(0);
-
-  bool Unused = CI->use_empty();
-
-  if (!Unused) {
-    // Replace the return value with the argument.
-    assert((IsForwarding(GetBasicARCInstKind(CI)) ||
-            (IsNoopOnNull(GetBasicARCInstKind(CI)) &&
-             IsNullOrUndef(OldArg->stripPointerCasts()))) &&
-           "Can't delete non-forwarding instruction with users!");
-    CI->replaceAllUsesWith(OldArg);
-  }
-
-  CI->eraseFromParent();
-
-  if (Unused)
-    RecursivelyDeleteTriviallyDeadInstructions(OldArg);
-}
+void EraseInstruction(Instruction *CI);
 
 /// If Inst is a ReturnRV and its operand is a call or invoke, return the
 /// operand. Otherwise return null.
-static inline const Instruction *getreturnRVOperand(const Instruction &Inst,
-                                                    ARCInstKind Class) {
-  if (Class != ARCInstKind::RetainRV)
-    return nullptr;
-
-  const auto *Opnd = Inst.getOperand(0)->stripPointerCasts();
-  if (const auto *C = dyn_cast<CallInst>(Opnd))
-    return C;
-  return dyn_cast<InvokeInst>(Opnd);
-}
+const Instruction *getreturnRVOperand(const Instruction &Inst,
+                                      ARCInstKind Class);
 
 /// Return the list of PHI nodes that are equivalent to PN.
-template<class PHINodeTy, class VectorTy>
+template <class PHINodeTy, class VectorTy>
 void getEquivalentPHIs(PHINodeTy &PN, VectorTy &PHIList) {
   auto *BB = PN.getParent();
   for (auto &P : BB->phis()) {
@@ -122,33 +96,10 @@ public:
       const DenseMap<BasicBlock *, ColorVector> &BlockColors);
 
   /// See if an instruction is a bundled retainRV/claimRV call.
-  bool contains(const Instruction *I) const {
-    if (auto *CI = dyn_cast<CallInst>(I))
-      return RVCalls.count(CI);
-    return false;
-  }
+  bool contains(const Instruction *I) const;
 
   /// Remove a retainRV/claimRV call entirely.
-  void eraseInst(CallInst *CI) {
-    auto It = RVCalls.find(CI);
-    if (It != RVCalls.end()) {
-      // Remove call to @llvm.objc.clang.arc.noop.use.
-      for (auto U = It->second->user_begin(), E = It->second->user_end(); U != E; ++U)
-        if (auto *CI = dyn_cast<CallInst>(*U))
-          if (CI->getIntrinsicID() == Intrinsic::objc_clang_arc_noop_use) {
-            CI->eraseFromParent();
-            break;
-          }
-
-      auto *NewCall = CallBase::removeOperandBundle(
-          It->second, LLVMContext::OB_clang_arc_attachedcall, It->second);
-      NewCall->copyMetadata(*It->second);
-      It->second->replaceAllUsesWith(NewCall);
-      It->second->eraseFromParent();
-      RVCalls.erase(It);
-    }
-    EraseInstruction(CI);
-  }
+  void eraseInst(CallInst *CI);
 
 private:
   /// A map of inserted retainRV/claimRV calls to annotated calls/invokes.

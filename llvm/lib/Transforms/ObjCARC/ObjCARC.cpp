@@ -43,6 +43,37 @@ void LLVMInitializeObjCARCOpts(LLVMPassRegistryRef R) {
   initializeObjCARCOpts(*unwrap(R));
 }
 
+void objcarc::EraseInstruction(Instruction *CI) {
+  Value *OldArg = cast<CallInst>(CI)->getArgOperand(0);
+
+  bool Unused = CI->use_empty();
+
+  if (!Unused) {
+    // Replace the return value with the argument.
+    assert((IsForwarding(GetBasicARCInstKind(CI)) ||
+            (IsNoopOnNull(GetBasicARCInstKind(CI)) &&
+             IsNullOrUndef(OldArg->stripPointerCasts()))) &&
+           "Can't delete non-forwarding instruction with users!");
+    CI->replaceAllUsesWith(OldArg);
+  }
+
+  CI->eraseFromParent();
+
+  if (Unused)
+    RecursivelyDeleteTriviallyDeadInstructions(OldArg);
+}
+
+const Instruction *objcarc::getreturnRVOperand(const Instruction &Inst,
+                                               ARCInstKind Class) {
+  if (Class != ARCInstKind::RetainRV)
+    return nullptr;
+
+  const auto *Opnd = Inst.getOperand(0)->stripPointerCasts();
+  if (const auto *C = dyn_cast<CallInst>(Opnd))
+    return C;
+  return dyn_cast<InvokeInst>(Opnd);
+}
+
 CallInst *objcarc::createCallInstWithColors(
     FunctionCallee Func, ArrayRef<Value *> Args, const Twine &NameStr,
     Instruction *InsertBefore,
@@ -111,6 +142,34 @@ CallInst *BundledRetainClaimRVs::insertRVCallWithColors(
       createCallInstWithColors(Func, CallArg, "", InsertPt, BlockColors);
   RVCalls[Call] = AnnotatedCall;
   return Call;
+}
+
+bool BundledRetainClaimRVs::contains(const Instruction *I) const {
+  if (auto *CI = dyn_cast<CallInst>(I))
+    return RVCalls.count(CI);
+  return false;
+}
+
+void BundledRetainClaimRVs::eraseInst(CallInst *CI) {
+  auto It = RVCalls.find(CI);
+  if (It != RVCalls.end()) {
+    // Remove call to @llvm.objc.clang.arc.noop.use.
+    for (auto U = It->second->user_begin(), E = It->second->user_end(); U != E;
+         ++U)
+      if (auto *CI = dyn_cast<CallInst>(*U))
+        if (CI->getIntrinsicID() == Intrinsic::objc_clang_arc_noop_use) {
+          CI->eraseFromParent();
+          break;
+        }
+
+    auto *NewCall = CallBase::removeOperandBundle(
+        It->second, LLVMContext::OB_clang_arc_attachedcall, It->second);
+    NewCall->copyMetadata(*It->second);
+    It->second->replaceAllUsesWith(NewCall);
+    It->second->eraseFromParent();
+    RVCalls.erase(It);
+  }
+  EraseInstruction(CI);
 }
 
 BundledRetainClaimRVs::~BundledRetainClaimRVs() {

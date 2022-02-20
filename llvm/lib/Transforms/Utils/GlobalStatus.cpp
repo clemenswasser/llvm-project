@@ -185,6 +185,12 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
   return false;
 }
 
+Value *GlobalStatus::getStoredOnceValue() const {
+  return (StoredType == StoredOnce && StoredOnceStore)
+             ? StoredOnceStore->getOperand(0)
+             : nullptr;
+}
+
 GlobalStatus::GlobalStatus() = default;
 
 bool GlobalStatus::analyzeGlobal(const Value *V, GlobalStatus &GS) {

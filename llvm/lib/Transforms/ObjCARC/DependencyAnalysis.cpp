@@ -24,6 +24,7 @@
 #include "ProvenanceAnalysis.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Instructions.h"
 
 using namespace llvm;
 using namespace llvm::objcarc;
@@ -73,6 +74,12 @@ bool llvm::objcarc::CanDecrementRefCount(const Instruction *Inst,
 
   // Otherwise, just use CanAlterRefCount for now.
   return CanAlterRefCount(Inst, Ptr, PA, Class);
+}
+
+bool llvm::objcarc::CanDecrementRefCount(const Instruction *Inst,
+                                         const Value *Ptr,
+                                         ProvenanceAnalysis &PA) {
+  return CanDecrementRefCount(Inst, Ptr, PA, GetARCInstKind(Inst));
 }
 
 /// Test whether the given instruction can "use" the given pointer's object in a

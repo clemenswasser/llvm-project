@@ -13,7 +13,6 @@
 #ifndef LLVM_TRANSFORMS_INSTRUMENTATION_HWADDRESSSANITIZER_H
 #define LLVM_TRANSFORMS_INSTRUMENTATION_HWADDRESSSANITIZER_H
 
-#include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 

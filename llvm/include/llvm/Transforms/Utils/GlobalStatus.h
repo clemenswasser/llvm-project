@@ -9,7 +9,6 @@
 #ifndef LLVM_TRANSFORMS_UTILS_GLOBALSTATUS_H
 #define LLVM_TRANSFORMS_UTILS_GLOBALSTATUS_H
 
-#include "llvm/IR/Instructions.h"
 #include "llvm/Support/AtomicOrdering.h"
 
 namespace llvm {
@@ -17,6 +16,7 @@ namespace llvm {
 class Constant;
 class Function;
 class Value;
+class StoreInst;
 
 /// It is safe to destroy a constant iff it is only used by constants itself.
 /// Note that constants cannot be cyclic, so this test is pretty easy to
@@ -61,11 +61,7 @@ struct GlobalStatus {
 
   /// If only one value (besides the initializer constant) is ever stored to
   /// this global return the stored value.
-  Value *getStoredOnceValue() const {
-    return (StoredType == StoredOnce && StoredOnceStore)
-               ? StoredOnceStore->getOperand(0)
-               : nullptr;
-  }
+  Value *getStoredOnceValue() const;
 
   /// These start out null/false.  When the first accessing function is noticed,
   /// it is recorded. When a second different accessing function is noticed,

@@ -15,7 +15,6 @@
 #ifndef LLVM_TRANSFORMS_SCALAR_LOWERCONSTANTINTRINSICS_H
 #define LLVM_TRANSFORMS_SCALAR_LOWERCONSTANTINTRINSICS_H
 
-#include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
 
 namespace llvm {
