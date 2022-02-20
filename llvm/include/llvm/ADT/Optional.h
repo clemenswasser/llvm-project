@@ -16,7 +16,6 @@
 #ifndef LLVM_ADT_OPTIONAL_H
 #define LLVM_ADT_OPTIONAL_H
 
-#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/STLForwardCompat.h"
 #include "llvm/Support/Compiler.h"
@@ -28,6 +27,7 @@
 namespace llvm {
 
 class raw_ostream;
+class hash_code;
 
 namespace optional_detail {
 
