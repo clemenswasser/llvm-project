@@ -33,11 +33,12 @@
 #ifndef LLVM_BINARYFORMAT_MSGPACKREADER_H
 #define LLVM_BINARYFORMAT_MSGPACKREADER_H
 
-#include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBufferRef.h"
 #include <cstdint>
 
 namespace llvm {
+template <typename T> class Expected;
+
 namespace msgpack {
 
 /// MessagePack types as defined in the standard, with the exception of Integer

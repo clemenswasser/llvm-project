@@ -18,9 +18,14 @@
 #define LLVM_BINARYFORMAT_MSGPACKDOCUMENT_H
 
 #include "llvm/BinaryFormat/MsgPackReader.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <map>
+#include <memory>
+#include <vector>
 
 namespace llvm {
+class raw_ostream;
+
 namespace msgpack {
 
 class ArrayDocNode;

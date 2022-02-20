@@ -9,14 +9,14 @@
 #ifndef LLVM_DEBUGINFO_GSYM_HEADER_H
 #define LLVM_DEBUGINFO_GSYM_HEADER_H
 
-#include "llvm/Support/Error.h"
-
 #include <cstddef>
 #include <cstdint>
 
 namespace llvm {
 class raw_ostream;
 class DataExtractor;
+class Error;
+template <typename T> class Expected;
 
 namespace gsym {
 class FileWriter;

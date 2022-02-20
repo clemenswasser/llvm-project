@@ -16,6 +16,7 @@
 
 #include "llvm/BinaryFormat/MsgPackDocument.h"
 #include "llvm/BinaryFormat/MsgPackWriter.h"
+#include "llvm/Support/Error.h"
 
 using namespace llvm;
 using namespace msgpack;
