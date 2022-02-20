@@ -9,9 +9,12 @@
 #ifndef LLVM_TOOLS_LLVM_REDUCE_REDUCERWORKITEM_H
 #define LLVM_TOOLS_LLVM_REDUCE_REDUCERWORKITEM_H
 
-#include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/IR/Module.h"
+
+namespace llvm {
+class MachineFunction;
+class MachineModuleInfo;
+} // namespace llvm
 
 using namespace llvm;
 

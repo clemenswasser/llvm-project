@@ -9,7 +9,6 @@
 #ifndef LLVM_TOOLS_LLVMPDBDUMP_LINEPRINTER_H
 #define LLVM_TOOLS_LLVMPDBDUMP_LINEPRINTER_H
 
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/BinaryStreamRef.h"
