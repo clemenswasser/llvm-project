@@ -66,16 +66,7 @@ inline bool ModuleHasARC(const Module &M) {
 /// This is a wrapper around getUnderlyingObject which also knows how to
 /// look through objc_retain and objc_autorelease calls, which we know to return
 /// their argument verbatim.
-inline const Value *GetUnderlyingObjCPtr(const Value *V) {
-  for (;;) {
-    V = getUnderlyingObject(V);
-    if (!IsForwarding(GetBasicARCInstKind(V)))
-      break;
-    V = cast<CallInst>(V)->getArgOperand(0);
-  }
-
-  return V;
-}
+const Value *GetUnderlyingObjCPtr(const Value *V);
 
 /// A wrapper for GetUnderlyingObjCPtr used for results memoization.
 inline const Value *GetUnderlyingObjCPtrCached(
@@ -107,15 +98,7 @@ inline const Value *GetUnderlyingObjCPtrCached(
 ///
 /// Thus this function strips off pointer casts and forwarding calls. *NOTE*
 /// This implies that two RCIdentical values must alias.
-inline const Value *GetRCIdentityRoot(const Value *V) {
-  for (;;) {
-    V = V->stripPointerCasts();
-    if (!IsForwarding(GetBasicARCInstKind(V)))
-      break;
-    V = cast<CallInst>(V)->getArgOperand(0);
-  }
-  return V;
-}
+const Value *GetRCIdentityRoot(const Value *V);
 
 /// Helper which calls const Value *GetRCIdentityRoot(const Value *V) and just
 /// casts away the const of the result. For documentation about what an
@@ -128,43 +111,16 @@ inline Value *GetRCIdentityRoot(Value *V) {
 /// Assuming the given instruction is one of the special calls such as
 /// objc_retain or objc_release, return the RCIdentity root of the argument of
 /// the call.
-inline Value *GetArgRCIdentityRoot(Value *Inst) {
-  return GetRCIdentityRoot(cast<CallInst>(Inst)->getArgOperand(0));
-}
+Value *GetArgRCIdentityRoot(Value *Inst);
 
 inline bool IsNullOrUndef(const Value *V) {
   return isa<ConstantPointerNull>(V) || isa<UndefValue>(V);
 }
 
-inline bool IsNoopInstruction(const Instruction *I) {
-  return isa<BitCastInst>(I) ||
-    (isa<GetElementPtrInst>(I) &&
-     cast<GetElementPtrInst>(I)->hasAllZeroIndices());
-}
+bool IsNoopInstruction(const Instruction *I);
 
 /// Test whether the given value is possible a retainable object pointer.
-inline bool IsPotentialRetainableObjPtr(const Value *Op) {
-  // Pointers to static or stack storage are not valid retainable object
-  // pointers.
-  if (isa<Constant>(Op) || isa<AllocaInst>(Op))
-    return false;
-  // Special arguments can not be a valid retainable object pointer.
-  if (const Argument *Arg = dyn_cast<Argument>(Op))
-    if (Arg->hasPassPointeeByValueCopyAttr() || Arg->hasNestAttr() ||
-        Arg->hasStructRetAttr())
-      return false;
-  // Only consider values with pointer types.
-  //
-  // It seemes intuitive to exclude function pointer types as well, since
-  // functions are never retainable object pointers, however clang occasionally
-  // bitcasts retainable object pointers to function-pointer type temporarily.
-  PointerType *Ty = dyn_cast<PointerType>(Op->getType());
-  if (!Ty)
-    return false;
-  // Conservatively assume anything else is a potential retainable object
-  // pointer.
-  return true;
-}
+bool IsPotentialRetainableObjPtr(const Value *Op);
 
 bool IsPotentialRetainableObjPtr(const Value *Op, AAResults &AA);
 
@@ -183,40 +139,7 @@ inline ARCInstKind GetCallSiteClass(const CallBase &CB) {
 ///
 /// This is similar to AliasAnalysis's isIdentifiedObject, except that it uses
 /// special knowledge of ObjC conventions.
-inline bool IsObjCIdentifiedObject(const Value *V) {
-  // Assume that call results and arguments have their own "provenance".
-  // Constants (including GlobalVariables) and Allocas are never
-  // reference-counted.
-  if (isa<CallInst>(V) || isa<InvokeInst>(V) ||
-      isa<Argument>(V) || isa<Constant>(V) ||
-      isa<AllocaInst>(V))
-    return true;
-
-  if (const LoadInst *LI = dyn_cast<LoadInst>(V)) {
-    const Value *Pointer =
-      GetRCIdentityRoot(LI->getPointerOperand());
-    if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(Pointer)) {
-      // A constant pointer can't be pointing to an object on the heap. It may
-      // be reference-counted, but it won't be deleted.
-      if (GV->isConstant())
-        return true;
-      StringRef Name = GV->getName();
-      // These special variables are known to hold values which are not
-      // reference-counted pointers.
-      if (Name.startswith("\01l_objc_msgSend_fixup_"))
-        return true;
-
-      StringRef Section = GV->getSection();
-      if (Section.contains("__message_refs") ||
-          Section.contains("__objc_classrefs") ||
-          Section.contains("__objc_superrefs") ||
-          Section.contains("__objc_methname") || Section.contains("__cstring"))
-        return true;
-    }
-  }
-
-  return false;
-}
+bool IsObjCIdentifiedObject(const Value *V);
 
 enum class ARCMDKindID {
   ImpreciseRelease,

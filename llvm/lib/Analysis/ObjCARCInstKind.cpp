@@ -20,6 +20,7 @@
 
 #include "llvm/Analysis/ObjCARCInstKind.h"
 #include "llvm/Analysis/ObjCARCAnalysisUtils.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 
 using namespace llvm;
@@ -151,6 +152,18 @@ ARCInstKind llvm::objcarc::GetFunctionClass(const Function *F) {
     // elucidate to be incorrect.
     return ARCInstKind::None;
   }
+}
+
+ARCInstKind llvm::objcarc::GetBasicARCInstKind(const Value *V) {
+  if (const CallInst *CI = dyn_cast<CallInst>(V)) {
+    if (const Function *F = CI->getCalledFunction())
+      return GetFunctionClass(F);
+    // Otherwise, be conservative.
+    return ARCInstKind::CallOrUser;
+  }
+
+  // Otherwise, be conservative.
+  return isa<InvokeInst>(V) ? ARCInstKind::CallOrUser : ARCInstKind::User;
 }
 
 // A list of intrinsics that we know do not use objc pointers or decrement

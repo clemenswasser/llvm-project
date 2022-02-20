@@ -15,7 +15,6 @@
 #define LLVM_ANALYSIS_ASSUMEBUNDLEQUERIES_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 
 namespace llvm {

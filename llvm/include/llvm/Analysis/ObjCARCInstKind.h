@@ -9,9 +9,13 @@
 #ifndef LLVM_ANALYSIS_OBJCARCINSTKIND_H
 #define LLVM_ANALYSIS_OBJCARCINSTKIND_H
 
-#include "llvm/IR/Instructions.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
+
+class Function;
+class Value;
+
 namespace objcarc {
 
 /// \enum ARCInstKind
@@ -101,17 +105,7 @@ ARCInstKind GetFunctionClass(const Function *F);
 /// This is similar to GetARCInstKind except that it only detects objc
 /// runtime calls. This allows it to be faster.
 ///
-inline ARCInstKind GetBasicARCInstKind(const Value *V) {
-  if (const CallInst *CI = dyn_cast<CallInst>(V)) {
-    if (const Function *F = CI->getCalledFunction())
-      return GetFunctionClass(F);
-    // Otherwise, be conservative.
-    return ARCInstKind::CallOrUser;
-  }
-
-  // Otherwise, be conservative.
-  return isa<InvokeInst>(V) ? ARCInstKind::CallOrUser : ARCInstKind::User;
-}
+ARCInstKind GetBasicARCInstKind(const Value *V);
 
 /// Map V to its ARCInstKind equivalence class.
 ARCInstKind GetARCInstKind(const Value *V);
