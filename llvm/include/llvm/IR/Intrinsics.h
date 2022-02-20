@@ -15,7 +15,6 @@
 #ifndef LLVM_IR_INTRINSICS_H
 #define LLVM_IR_INTRINSICS_H
 
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/Support/TypeSize.h"

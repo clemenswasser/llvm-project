@@ -10,8 +10,6 @@
 #ifndef LLVM_IR_INSTVISITOR_H
 #define LLVM_IR_INSTVISITOR_H
 
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"

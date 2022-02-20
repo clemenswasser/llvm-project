@@ -28,7 +28,6 @@
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/OperandTraits.h"
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"

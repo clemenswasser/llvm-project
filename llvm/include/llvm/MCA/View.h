@@ -15,7 +15,6 @@
 #ifndef LLVM_MCA_VIEW_H
 #define LLVM_MCA_VIEW_H
 
-#include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MCA/HWEventListener.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
