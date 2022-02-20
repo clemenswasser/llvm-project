@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/BinaryFormat/MsgPackDocument.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/YAMLTraits.h"
 
 using namespace llvm;

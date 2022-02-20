@@ -178,6 +178,10 @@ StringRef MCInstPrinter::markup(StringRef s) const {
     return "";
 }
 
+format_object<int64_t> MCInstPrinter::formatImm(int64_t Value) const {
+  return PrintImmHex ? formatHex(Value) : formatDec(Value);
+}
+
 // For asm-style hex (e.g. 0ffh) the first digit always has to be a number.
 static bool needsLeadingZero(uint64_t Value)
 {

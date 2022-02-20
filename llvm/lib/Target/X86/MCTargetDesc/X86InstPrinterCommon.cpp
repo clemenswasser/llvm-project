@@ -18,10 +18,11 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Casting.h"
-#include <cstdint>
+#include "llvm/Support/Format.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cassert>
+#include <cstdint>
 
 using namespace llvm;
 

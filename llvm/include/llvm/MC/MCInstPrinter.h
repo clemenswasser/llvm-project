@@ -9,7 +9,8 @@
 #ifndef LLVM_MC_MCINSTPRINTER_H
 #define LLVM_MC_MCINSTPRINTER_H
 
-#include "llvm/Support/Format.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 #include <cstdint>
 
 namespace llvm {
@@ -23,6 +24,7 @@ class MCRegisterInfo;
 class MCSubtargetInfo;
 class raw_ostream;
 class StringRef;
+template <typename... Ts> class format_object;
 
 /// Convert `Bytes' to a hex string and output to `OS'
 void dumpBytes(ArrayRef<uint8_t> Bytes, raw_ostream &OS);
@@ -131,9 +133,7 @@ public:
   void setMCInstrAnalysis(const MCInstrAnalysis *Value) { MIA = Value; }
 
   /// Utility function to print immediates in decimal or hex.
-  format_object<int64_t> formatImm(int64_t Value) const {
-    return PrintImmHex ? formatHex(Value) : formatDec(Value);
-  }
+  format_object<int64_t> formatImm(int64_t Value) const;
 
   /// Utility functions to print decimal/hexadecimal values.
   format_object<int64_t> formatDec(int64_t Value) const;
