@@ -14,13 +14,13 @@
 #ifndef LLVM_AVR_H
 #define LLVM_AVR_H
 
-#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
 
 class AVRTargetMachine;
 class FunctionPass;
+class MemSDNode;
 
 Pass *createAVRShiftExpandPass();
 FunctionPass *createAVRISelDag(AVRTargetMachine &TM,
@@ -70,25 +70,13 @@ template <typename T> AddressSpace getAddressSpace(T *V) {
   return NumAddrSpaces;
 }
 
-inline bool isProgramMemoryAccess(MemSDNode const *N) {
-  auto *V = N->getMemOperand()->getValue();
-  if (V != nullptr && isProgramMemoryAddress(V))
-    return true;
-  return false;
-}
+bool isProgramMemoryAccess(MemSDNode const *N);
 
 // Get the index of the program memory bank.
 //  -1: not program memory
 //   0: ordinary program memory
 // 1~5: extended program memory
-inline int getProgramMemoryBank(MemSDNode const *N) {
-  auto *V = N->getMemOperand()->getValue();
-  if (V == nullptr || !isProgramMemoryAddress(V))
-    return -1;
-  AddressSpace AS = getAddressSpace(V);
-  assert(ProgramMemory <= AS && AS <= ProgramMemory5);
-  return static_cast<int>(AS - ProgramMemory);
-}
+int getProgramMemoryBank(MemSDNode const *N);
 
 } // end of namespace AVR
 
