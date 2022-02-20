@@ -939,6 +939,11 @@ bool FastISel::selectXRayTypedEvent(const CallInst *I) {
   return true;
 }
 
+bool FastISel::shouldOptForSize(const MachineFunction *MF) const {
+  // TODO: Implement PGSO.
+  return MF->getFunction().hasOptSize();
+}
+
 /// Returns an AttributeList representing the attributes applied to the return
 /// value of the given call.
 static AttributeList getReturnAttrs(FastISel::CallLoweringInfo &CLI) {

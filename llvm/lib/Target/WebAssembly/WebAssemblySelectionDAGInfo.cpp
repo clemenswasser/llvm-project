@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyTargetMachine.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm-selectiondag-info"

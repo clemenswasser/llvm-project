@@ -16,6 +16,7 @@
 #include "SDNodeDbgValue.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/CommandLine.h"
@@ -27,6 +28,26 @@ using namespace llvm;
 
 static cl::opt<bool>
 EnableExpensiveChecks("enable-legalize-types-checking", cl::Hidden);
+
+DAGTypeLegalizer::DAGTypeLegalizer(SelectionDAG &dag)
+    : TLI(dag.getTargetLoweringInfo()), DAG(dag),
+      ValueTypeActions(TLI.getValueTypeActions()) {
+  static_assert(MVT::LAST_VALUETYPE <= MVT::MAX_ALLOWED_VALUETYPE,
+                "Too many value types for ValueTypeActions to hold!");
+}
+
+TargetLowering::LegalizeTypeAction
+DAGTypeLegalizer::getTypeAction(EVT VT) const {
+  return TLI.getTypeAction(*DAG.getContext(), VT);
+}
+
+bool DAGTypeLegalizer::isTypeLegal(EVT VT) const {
+  return TLI.getTypeAction(*DAG.getContext(), VT) == TargetLowering::TypeLegal;
+}
+
+EVT DAGTypeLegalizer::getSetCCResultType(EVT VT) const {
+  return TLI.getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), VT);
+}
 
 /// Do extensive, expensive, basic correctness checking.
 void DAGTypeLegalizer::PerformExpensiveChecks() {
@@ -1038,6 +1059,35 @@ void DAGTypeLegalizer::SplitInteger(SDValue Op,
   SplitInteger(Op, HalfVT, HalfVT, Lo, Hi);
 }
 
+SDValue DAGTypeLegalizer::SExtPromotedInteger(SDValue Op) {
+  EVT OldVT = Op.getValueType();
+  SDLoc dl(Op);
+  Op = GetPromotedInteger(Op);
+  return DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, Op.getValueType(), Op,
+                     DAG.getValueType(OldVT));
+}
+
+/// Get a promoted operand and zero extend it to the final size.
+SDValue DAGTypeLegalizer::ZExtPromotedInteger(SDValue Op) {
+  EVT OldVT = Op.getValueType();
+  SDLoc dl(Op);
+  Op = GetPromotedInteger(Op);
+  return DAG.getZeroExtendInReg(Op, dl, OldVT);
+}
+
+// Get a promoted operand and sign or zero extend it to the final size
+// (depending on TargetLoweringInfo::isSExtCheaperThanZExt). For a given
+// subtarget and type, the choice of sign or zero-extension will be
+// consistent.
+SDValue DAGTypeLegalizer::SExtOrZExtPromotedInteger(SDValue Op) {
+  EVT OldVT = Op.getValueType();
+  SDLoc DL(Op);
+  Op = GetPromotedInteger(Op);
+  if (TLI.isSExtCheaperThanZExt(OldVT, Op.getValueType()))
+    return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, Op.getValueType(), Op,
+                       DAG.getValueType(OldVT));
+  return DAG.getZeroExtendInReg(Op, DL, OldVT);
+}
 
 //===----------------------------------------------------------------------===//
 //  Entry Point

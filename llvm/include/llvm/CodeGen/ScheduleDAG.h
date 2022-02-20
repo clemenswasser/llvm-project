@@ -20,7 +20,6 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
@@ -381,13 +380,7 @@ class TargetRegisterInfo;
 
     /// Adds a barrier edge to SU by calling addPred(), with latency 0
     /// generally or latency 1 for a store followed by a load.
-    bool addPredBarrier(SUnit *SU) {
-      SDep Dep(SU, SDep::Barrier);
-      unsigned TrueMemOrderLatency =
-        ((SU->getInstr()->mayStore() && this->getInstr()->mayLoad()) ? 1 : 0);
-      Dep.setLatency(TrueMemOrderLatency);
-      return addPred(Dep);
-    }
+    bool addPredBarrier(SUnit *SU);
 
     /// Removes the specified edge as a pred of the current node if it exists.
     /// It also removes the current node as a successor of the specified node.
@@ -578,10 +571,7 @@ class TargetRegisterInfo;
 
     /// Returns the MCInstrDesc of this SUnit.
     /// Returns NULL for SDNodes without a machine opcode.
-    const MCInstrDesc *getInstrDesc(const SUnit *SU) const {
-      if (SU->isInstr()) return &SU->getInstr()->getDesc();
-      return getNodeDesc(SU->getNode());
-    }
+    const MCInstrDesc *getInstrDesc(const SUnit *SU) const;
 
     /// Pops up a GraphViz/gv window with the ScheduleDAG rendered using 'dot'.
     virtual void viewGraph(const Twine &Name, const Twine &Title);

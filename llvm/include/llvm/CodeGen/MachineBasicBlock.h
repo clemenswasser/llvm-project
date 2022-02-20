@@ -17,10 +17,11 @@
 #include "llvm/ADT/ilist.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/SparseBitVector.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBundleIterator.h"
+#include "llvm/CodeGen/Register.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/MC/LaneBitmask.h"
+#include "llvm/MC/MCRegister.h"
 #include "llvm/Support/BranchProbability.h"
 #include <cassert>
 #include <cstdint>
@@ -43,6 +44,7 @@ class raw_ostream;
 class LiveIntervals;
 class TargetRegisterClass;
 class TargetRegisterInfo;
+class MachineInstr;
 
 // This structure uniquely identifies a basic block section.
 // Possible values are
@@ -243,24 +245,24 @@ public:
   unsigned size() const { return (unsigned)Insts.size(); }
   bool empty() const { return Insts.empty(); }
 
-  MachineInstr       &instr_front()       { return Insts.front(); }
-  MachineInstr       &instr_back()        { return Insts.back();  }
-  const MachineInstr &instr_front() const { return Insts.front(); }
-  const MachineInstr &instr_back()  const { return Insts.back();  }
+  MachineInstr &instr_front();
+  MachineInstr &instr_back();
+  const MachineInstr &instr_front() const;
+  const MachineInstr &instr_back() const;
 
-  MachineInstr       &front()             { return Insts.front(); }
-  MachineInstr       &back()              { return *--end();      }
-  const MachineInstr &front()       const { return Insts.front(); }
-  const MachineInstr &back()        const { return *--end();      }
+  MachineInstr &front();
+  MachineInstr &back();
+  const MachineInstr &front() const;
+  const MachineInstr &back() const;
 
-  instr_iterator                instr_begin()       { return Insts.begin();  }
-  const_instr_iterator          instr_begin() const { return Insts.begin();  }
-  instr_iterator                  instr_end()       { return Insts.end();    }
-  const_instr_iterator            instr_end() const { return Insts.end();    }
-  reverse_instr_iterator       instr_rbegin()       { return Insts.rbegin(); }
-  const_reverse_instr_iterator instr_rbegin() const { return Insts.rbegin(); }
-  reverse_instr_iterator       instr_rend  ()       { return Insts.rend();   }
-  const_reverse_instr_iterator instr_rend  () const { return Insts.rend();   }
+  instr_iterator instr_begin();
+  const_instr_iterator instr_begin() const;
+  instr_iterator instr_end();
+  const_instr_iterator instr_end() const;
+  reverse_instr_iterator instr_rbegin();
+  const_reverse_instr_iterator instr_rbegin() const;
+  reverse_instr_iterator instr_rend();
+  const_reverse_instr_iterator instr_rend() const;
 
   using instr_range = iterator_range<instr_iterator>;
   using const_instr_range = iterator_range<const_instr_iterator>;
@@ -269,10 +271,10 @@ public:
     return const_instr_range(instr_begin(), instr_end());
   }
 
-  iterator                begin()       { return instr_begin();  }
-  const_iterator          begin() const { return instr_begin();  }
-  iterator                end  ()       { return instr_end();    }
-  const_iterator          end  () const { return instr_end();    }
+  iterator begin();
+  const_iterator begin() const;
+  iterator end();
+  const_iterator end() const;
   reverse_iterator rbegin() {
     return reverse_iterator::getAtBundleBegin(instr_rbegin());
   }
@@ -819,15 +821,11 @@ public:
 
   /// Convenience function that returns true if the block ends in a return
   /// instruction.
-  bool isReturnBlock() const {
-    return !empty() && back().isReturn();
-  }
+  bool isReturnBlock() const;
 
   /// Convenience function that returns true if the bock ends in a EH scope
   /// return instruction.
-  bool isEHScopeReturnBlock() const {
-    return !empty() && back().isEHScopeReturn();
-  }
+  bool isEHScopeReturnBlock() const;
 
   /// Split a basic block into 2 pieces at \p SplitPoint. A new block will be
   /// inserted after this block, and all instructions after \p SplitInst moved
@@ -870,40 +868,19 @@ public:
   /// Insert a range of instructions into the instruction list before I.
   template<typename IT>
   void insert(iterator I, IT S, IT E) {
-    assert((I == end() || I->getParent() == this) &&
-           "iterator points outside of basic block");
+    assertIteratorInBasicBlock(I);
     Insts.insert(I.getInstrIterator(), S, E);
   }
 
   /// Insert MI into the instruction list before I.
-  iterator insert(iterator I, MachineInstr *MI) {
-    assert((I == end() || I->getParent() == this) &&
-           "iterator points outside of basic block");
-    assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
-           "Cannot insert instruction with bundle flags");
-    return Insts.insert(I.getInstrIterator(), MI);
-  }
+  iterator insert(iterator I, MachineInstr *MI);
 
   /// Insert MI into the instruction list after I.
-  iterator insertAfter(iterator I, MachineInstr *MI) {
-    assert((I == end() || I->getParent() == this) &&
-           "iterator points outside of basic block");
-    assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
-           "Cannot insert instruction with bundle flags");
-    return Insts.insertAfter(I.getInstrIterator(), MI);
-  }
+  iterator insertAfter(iterator I, MachineInstr *MI);
 
   /// If I is bundled then insert MI into the instruction list after the end of
   /// the bundle, otherwise insert MI immediately after I.
-  instr_iterator insertAfterBundle(instr_iterator I, MachineInstr *MI) {
-    assert((I == instr_end() || I->getParent() == this) &&
-           "iterator points outside of basic block");
-    assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
-           "Cannot insert instruction with bundle flags");
-    while (I->isBundledWithSucc())
-      ++I;
-    return Insts.insertAfter(I, MI);
-  }
+  instr_iterator insertAfterBundle(instr_iterator I, MachineInstr *MI);
 
   /// Remove an instruction from the instruction list and delete it.
   ///
@@ -944,10 +921,7 @@ public:
   ///
   /// This function can not be used to remove bundled instructions, use
   /// remove_instr to remove individual instructions from a bundle.
-  MachineInstr *remove(MachineInstr *I) {
-    assert(!I->isBundled() && "Cannot remove bundled instructions");
-    return Insts.remove(instr_iterator(I));
-  }
+  MachineInstr *remove(MachineInstr *I);
 
   /// Remove the possibly bundled instruction from the instruction list
   /// without deleting it.
@@ -1115,6 +1089,8 @@ private:
   /// unless you know what you're doing, because it doesn't update Pred's
   /// successors list. Use Pred->removeSuccessor instead.
   void removePredecessor(MachineBasicBlock *Pred);
+
+  void assertIteratorInBasicBlock(iterator I);
 };
 
 raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
@@ -1200,11 +1176,7 @@ class MachineInstrSpan {
   MachineBasicBlock::iterator I, B, E;
 
 public:
-  MachineInstrSpan(MachineBasicBlock::iterator I, MachineBasicBlock *BB)
-      : MBB(*BB), I(I), B(I == MBB.begin() ? MBB.end() : std::prev(I)),
-        E(std::next(I)) {
-    assert(I == BB->end() || I->getParent() == BB);
-  }
+  MachineInstrSpan(MachineBasicBlock::iterator I, MachineBasicBlock *BB);
 
   MachineBasicBlock::iterator begin() {
     return B == MBB.end() ? MBB.begin() : std::next(B);
@@ -1255,13 +1227,16 @@ inline IterT prev_nodbg(IterT It, IterT Begin, bool SkipPseudoOp = true) {
   return skipDebugInstructionsBackward(std::prev(It), Begin, SkipPseudoOp);
 }
 
+bool instructionIsDebug(const MachineInstr &MI);
+bool instructionIsPseudoProbe(const MachineInstr &MI);
+
 /// Construct a range iterator which begins at \p It and moves forwards until
 /// \p End is reached, skipping any debug instructions.
 template <typename IterT>
 inline auto instructionsWithoutDebug(IterT It, IterT End,
                                      bool SkipPseudoOp = true) {
   return make_filter_range(make_range(It, End), [=](const MachineInstr &MI) {
-    return !MI.isDebugInstr() && !(SkipPseudoOp && MI.isPseudoProbe());
+    return !instructionIsDebug(MI) && !(SkipPseudoOp && instructionIsPseudoProbe(MI));
   });
 }
 

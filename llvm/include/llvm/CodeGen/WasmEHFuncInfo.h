@@ -16,12 +16,12 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 
 namespace llvm {
 
 class BasicBlock;
 class Function;
-class MachineBasicBlock;
 
 namespace WebAssembly {
 enum Tag { CPP_EXCEPTION = 0, C_LONGJMP = 1 };

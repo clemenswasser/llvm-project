@@ -4301,6 +4301,22 @@ SDValue AMDGPUTargetLowering::CreateLiveInRegister(SelectionDAG &DAG,
   return DAG.getCopyFromReg(DAG.getEntryNode(), SL, VReg, VT);
 }
 
+SDValue
+AMDGPUTargetLowering::CreateLiveInRegister(SelectionDAG &DAG,
+                                           const TargetRegisterClass *RC,
+                                           Register Reg, EVT VT) const {
+  return CreateLiveInRegister(DAG, RC, Reg, VT, SDLoc(DAG.getEntryNode()));
+}
+
+// Returns the raw live in register rather than a copy from it.
+SDValue
+AMDGPUTargetLowering::CreateLiveInRegisterRaw(SelectionDAG &DAG,
+                                              const TargetRegisterClass *RC,
+                                              Register Reg, EVT VT) const {
+  return CreateLiveInRegister(DAG, RC, Reg, VT, SDLoc(DAG.getEntryNode()),
+                              true);
+}
+
 // This may be called multiple times, and nothing prevents creating multiple
 // objects at the same offset. See if we already defined this object.
 static int getOrCreateFixedStackObject(MachineFrameInfo &MFI, unsigned Size,

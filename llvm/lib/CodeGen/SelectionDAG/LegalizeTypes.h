@@ -16,12 +16,13 @@
 #define LLVM_LIB_CODEGEN_SELECTIONDAG_LEGALIZETYPES_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 
 namespace llvm {
+
+class SelectionDAG;
 
 //===----------------------------------------------------------------------===//
 /// This takes an arbitrary SelectionDAG as input and hacks on it until only
@@ -59,23 +60,17 @@ private:
   TargetLowering::ValueTypeActionImpl ValueTypeActions;
 
   /// Return how we should legalize values of this type.
-  TargetLowering::LegalizeTypeAction getTypeAction(EVT VT) const {
-    return TLI.getTypeAction(*DAG.getContext(), VT);
-  }
+  TargetLowering::LegalizeTypeAction getTypeAction(EVT VT) const;
 
   /// Return true if this type is legal on this target.
-  bool isTypeLegal(EVT VT) const {
-    return TLI.getTypeAction(*DAG.getContext(), VT) == TargetLowering::TypeLegal;
-  }
+  bool isTypeLegal(EVT VT) const;
 
   /// Return true if this is a simple legal type.
   bool isSimpleLegalType(EVT VT) const {
     return VT.isSimple() && TLI.isTypeLegal(VT);
   }
 
-  EVT getSetCCResultType(EVT VT) const {
-    return TLI.getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), VT);
-  }
+  EVT getSetCCResultType(EVT VT) const;
 
   /// Pretend all of this node's results are legal.
   bool IgnoreNodeResults(SDNode *N) const {
@@ -165,12 +160,7 @@ private:
   }
 
 public:
-  explicit DAGTypeLegalizer(SelectionDAG &dag)
-    : TLI(dag.getTargetLoweringInfo()), DAG(dag),
-    ValueTypeActions(TLI.getValueTypeActions()) {
-    static_assert(MVT::LAST_VALUETYPE <= MVT::MAX_ALLOWED_VALUETYPE,
-                  "Too many value types for ValueTypeActions to hold!");
-  }
+  explicit DAGTypeLegalizer(SelectionDAG &dag);
 
   /// This is the main entry point for the type legalizer.  This does a
   /// top-down traversal of the dag, legalizing types as it goes.  Returns
@@ -259,35 +249,16 @@ private:
   void SetPromotedInteger(SDValue Op, SDValue Result);
 
   /// Get a promoted operand and sign extend it to the final size.
-  SDValue SExtPromotedInteger(SDValue Op) {
-    EVT OldVT = Op.getValueType();
-    SDLoc dl(Op);
-    Op = GetPromotedInteger(Op);
-    return DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, Op.getValueType(), Op,
-                       DAG.getValueType(OldVT));
-  }
+  SDValue SExtPromotedInteger(SDValue Op);
 
   /// Get a promoted operand and zero extend it to the final size.
-  SDValue ZExtPromotedInteger(SDValue Op) {
-    EVT OldVT = Op.getValueType();
-    SDLoc dl(Op);
-    Op = GetPromotedInteger(Op);
-    return DAG.getZeroExtendInReg(Op, dl, OldVT);
-  }
+  SDValue ZExtPromotedInteger(SDValue Op);
 
   // Get a promoted operand and sign or zero extend it to the final size
   // (depending on TargetLoweringInfo::isSExtCheaperThanZExt). For a given
   // subtarget and type, the choice of sign or zero-extension will be
   // consistent.
-  SDValue SExtOrZExtPromotedInteger(SDValue Op) {
-    EVT OldVT = Op.getValueType();
-    SDLoc DL(Op);
-    Op = GetPromotedInteger(Op);
-    if (TLI.isSExtCheaperThanZExt(OldVT, Op.getValueType()))
-      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, Op.getValueType(), Op,
-                         DAG.getValueType(OldVT));
-    return DAG.getZeroExtendInReg(Op, DL, OldVT);
-  }
+  SDValue SExtOrZExtPromotedInteger(SDValue Op);
 
   // Promote the given operand V (vector or scalar) according to N's specific
   // reduction kind. N must be an integer VECREDUCE_* or VP_REDUCE_*. Returns

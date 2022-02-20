@@ -19,6 +19,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "LegalizeTypes.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DataLayout.h"
 using namespace llvm;
 

@@ -30,6 +30,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
@@ -1523,6 +1524,28 @@ void TargetLoweringBase::computeRegisterProperties(
   }
 }
 
+bool TargetLoweringBase::isLoadBitCastBeneficial(
+    EVT LoadVT, EVT BitcastVT, const SelectionDAG &DAG,
+    const MachineMemOperand &MMO) const {
+  // Don't do if we could do an indexed load on the original type, but not on
+  // the new one.
+  if (!LoadVT.isSimple() || !BitcastVT.isSimple())
+    return true;
+
+  MVT LoadMVT = LoadVT.getSimpleVT();
+
+  // Don't bother doing this if it's just going to be promoted again later, as
+  // doing so might interfere with other combines.
+  if (getOperationAction(ISD::LOAD, LoadMVT) == Promote &&
+      getTypeToPromoteTo(ISD::LOAD, LoadMVT) == BitcastVT.getSimpleVT())
+    return false;
+
+  bool Fast = false;
+  return allowsMemoryAccess(*DAG.getContext(), DAG.getDataLayout(), BitcastVT,
+                            MMO, &Fast) &&
+         Fast;
+}
+
 EVT TargetLoweringBase::getSetCCResultType(const DataLayout &DL, LLVMContext &,
                                            EVT VT) const {
   assert(!VT.isVector() && "No default SetCC type for vectors!");
@@ -1531,6 +1554,16 @@ EVT TargetLoweringBase::getSetCCResultType(const DataLayout &DL, LLVMContext &,
 
 MVT::SimpleValueType TargetLoweringBase::getCmpLibcallReturnType() const {
   return MVT::i32; // return the default value
+}
+
+SDValue TargetLoweringBase::promoteTargetBoolean(SelectionDAG &DAG,
+                                                 SDValue Bool,
+                                                 EVT ValVT) const {
+  SDLoc dl(Bool);
+  EVT BoolVT =
+      getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), ValVT);
+  ISD::NodeType ExtendCode = getExtendForContent(getBooleanContents(ValVT));
+  return DAG.getNode(ExtendCode, dl, BoolVT, Bool);
 }
 
 /// getVectorTypeBreakdown - Vector types are broken down into some number of
@@ -2236,6 +2269,25 @@ int TargetLoweringBase::getSqrtRefinementSteps(EVT VT,
 int TargetLoweringBase::getDivRefinementSteps(EVT VT,
                                               MachineFunction &MF) const {
   return getOpRefinementSteps(false, VT, getRecipEstimateForFunc(MF));
+}
+
+bool TargetLoweringBase::isFMADLegal(const MachineInstr &MI, LLT Ty) const {
+  assert((MI.getOpcode() == TargetOpcode::G_FADD ||
+          MI.getOpcode() == TargetOpcode::G_FSUB ||
+          MI.getOpcode() == TargetOpcode::G_FMUL) &&
+         "unexpected node in FMAD forming combine");
+  switch (Ty.getScalarSizeInBits()) {
+  case 16:
+    return isOperationLegal(TargetOpcode::G_FMAD, MVT::f16);
+  case 32:
+    return isOperationLegal(TargetOpcode::G_FMAD, MVT::f32);
+  case 64:
+    return isOperationLegal(TargetOpcode::G_FMAD, MVT::f64);
+  default:
+    break;
+  }
+
+  return false;
 }
 
 void TargetLoweringBase::finalizeLowering(MachineFunction &MF) const {

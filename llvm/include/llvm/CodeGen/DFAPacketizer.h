@@ -45,6 +45,8 @@ class MachineLoopInfo;
 class MCInstrDesc;
 class SUnit;
 class TargetInstrInfo;
+class AAResults;
+class MachineMemOperand;
 
 class DFAPacketizer {
 private:

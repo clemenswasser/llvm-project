@@ -6321,6 +6321,11 @@ SDValue TargetLowering::getSqrtInputTest(SDValue Op, SelectionDAG &DAG,
   return DAG.getSetCC(DL, CCVT, Op, FPZero, ISD::SETEQ);
 }
 
+SDValue TargetLowering::getSqrtResultForDenormInput(SDValue Operand,
+                                                    SelectionDAG &DAG) const {
+  return DAG.getConstantFP(0.0, SDLoc(Operand), Operand.getValueType());
+}
+
 SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
                                              bool LegalOps, bool OptForSize,
                                              NegatibleCost &Cost,
@@ -6588,6 +6593,37 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
   }
 
   return SDValue();
+}
+
+SDValue TargetLowering::getCheaperNegatedExpression(SDValue Op,
+                                                    SelectionDAG &DAG,
+                                                    bool LegalOps,
+                                                    bool OptForSize,
+                                                    unsigned Depth) const {
+  NegatibleCost Cost = NegatibleCost::Expensive;
+  SDValue Neg =
+      getNegatedExpression(Op, DAG, LegalOps, OptForSize, Cost, Depth);
+  if (Neg && Cost == NegatibleCost::Cheaper)
+    return Neg;
+  // Remove the new created node to avoid the side effect to the DAG.
+  if (Neg && Neg->use_empty())
+    DAG.RemoveDeadNode(Neg.getNode());
+  return SDValue();
+}
+
+TargetLowering::CallLoweringInfo &
+TargetLowering::CallLoweringInfo::setLibCallee(CallingConv::ID CC,
+                                               Type *ResultType, SDValue Target,
+                                               ArgListTy &&ArgsList) {
+  RetTy = ResultType;
+  Callee = Target;
+  CallConv = CC;
+  NumFixedArgs = ArgsList.size();
+  Args = std::move(ArgsList);
+
+  DAG.getTargetLoweringInfo().markLibCallAttributes(&(DAG.getMachineFunction()),
+                                                    CC, Args);
+  return *this;
 }
 
 //===----------------------------------------------------------------------===//
@@ -8209,6 +8245,12 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
   assert((GA->getOffset() == 0) &&
          "Emulated TLS must have zero offset in GlobalAddressSDNode");
   return CallResult.first;
+}
+
+SDValue TargetLowering::expandIndirectJTBranch(const SDLoc &dl, SDValue Value,
+                                               SDValue Addr,
+                                               SelectionDAG &DAG) const {
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Value, Addr);
 }
 
 SDValue TargetLowering::lowerCmpEqZeroToCtlzSrl(SDValue Op,

@@ -16,7 +16,6 @@
 #ifndef LLVM_CODEGEN_REGISTERCLASSINFO_H
 #define LLVM_CODEGEN_REGISTERCLASSINFO_H
 
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"

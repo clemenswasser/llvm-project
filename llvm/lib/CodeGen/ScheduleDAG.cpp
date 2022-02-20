@@ -67,6 +67,12 @@ void ScheduleDAG::clearDAG() {
   ExitSU = SUnit();
 }
 
+const MCInstrDesc *ScheduleDAG::getInstrDesc(const SUnit *SU) const {
+  if (SU->isInstr())
+    return &SU->getInstr()->getDesc();
+  return getNodeDesc(SU->getNode());
+}
+
 const MCInstrDesc *ScheduleDAG::getNodeDesc(const SDNode *Node) const {
   if (!Node || !Node->isMachineOpcode()) return nullptr;
   return &TII->get(Node->getMachineOpcode());
@@ -170,6 +176,14 @@ bool SUnit::addPred(const SDep &D, bool Required) {
     N->setHeightDirty();
   }
   return true;
+}
+
+bool SUnit::addPredBarrier(SUnit *SU) {
+  SDep Dep(SU, SDep::Barrier);
+  unsigned TrueMemOrderLatency =
+      ((SU->getInstr()->mayStore() && this->getInstr()->mayLoad()) ? 1 : 0);
+  Dep.setLatency(TrueMemOrderLatency);
+  return addPred(Dep);
 }
 
 void SUnit::removePred(const SDep &D) {

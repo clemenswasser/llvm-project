@@ -15,6 +15,7 @@
 #define LLVM_LIB_TARGET_VE_VEISELLOWERING_H
 
 #include "VE.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {

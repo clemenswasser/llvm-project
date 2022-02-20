@@ -102,6 +102,19 @@ void StatepointLoweringState::clear() {
          "cleared before statepoint sequence completed");
 }
 
+SDValue StatepointLoweringState::getLocation(SDValue Val) {
+  auto I = Locations.find(Val);
+  if (I == Locations.end())
+    return SDValue();
+  return I->second;
+}
+
+void StatepointLoweringState::setLocation(SDValue Val, SDValue Location) {
+  assert(!Locations.count(Val) &&
+         "Trying to allocate already allocated location");
+  Locations[Val] = Location;
+}
+
 SDValue
 StatepointLoweringState::allocateStackSlot(EVT ValueType,
                                            SelectionDAGBuilder &Builder) {
@@ -1162,6 +1175,10 @@ void SelectionDAGBuilder::LowerCallSiteWithDeoptBundleImpl(
     ReturnVal = lowerRangeToAssertZExt(DAG, *Call, ReturnVal);
     setValue(Call, ReturnVal);
   }
+}
+
+MVT SelectionDAGBuilder::getFrameIndexTy() {
+  return DAG.getTargetLoweringInfo().getFrameIndexTy(DAG.getDataLayout());
 }
 
 void SelectionDAGBuilder::LowerCallSiteWithDeoptBundle(

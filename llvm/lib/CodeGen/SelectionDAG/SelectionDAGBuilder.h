@@ -239,10 +239,8 @@ public:
   LLVMContext *Context;
 
   SelectionDAGBuilder(SelectionDAG &dag, FunctionLoweringInfo &funcinfo,
-                      SwiftErrorValueTracking &swifterror, CodeGenOpt::Level ol)
-      : SDNodeOrder(LowestSDNodeOrder), TM(dag.getTarget()), DAG(dag),
-        SL(std::make_unique<SDAGSwitchLowering>(this, funcinfo)), FuncInfo(funcinfo),
-        SwiftError(swifterror) {}
+                      SwiftErrorValueTracking &swifterror,
+                      CodeGenOpt::Level ol);
 
   void init(GCFunctionInfo *gfi, AAResults *AA,
             const TargetLibraryInfo *li);
@@ -439,9 +437,7 @@ public:
                                         bool ForceVoidReturnTy);
 
   /// Returns the type of FrameIndex and TargetFrameIndex nodes.
-  MVT getFrameIndexTy() {
-    return DAG.getTargetLoweringInfo().getFrameIndexTy(DAG.getDataLayout());
-  }
+  MVT getFrameIndexTy();
 
 private:
   // Terminator instructions.

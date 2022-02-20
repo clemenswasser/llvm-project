@@ -10,6 +10,7 @@
 #include "HexagonRegisterInfo.h"
 #include "HexagonSubtarget.h"
 #include "llvm/Analysis/MemoryLocation.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/IntrinsicsHexagon.h"
 #include "llvm/Support/CommandLine.h"
 

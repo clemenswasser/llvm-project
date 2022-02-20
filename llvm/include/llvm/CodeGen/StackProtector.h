@@ -19,7 +19,6 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/ValueMap.h"
 #include "llvm/Pass.h"
 
@@ -33,6 +32,8 @@ class Module;
 class TargetLoweringBase;
 class TargetMachine;
 class Type;
+class PHINode;
+class TypeSize;
 
 class StackProtector : public FunctionPass {
 private:

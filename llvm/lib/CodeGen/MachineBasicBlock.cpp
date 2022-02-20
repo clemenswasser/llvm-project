@@ -255,6 +255,14 @@ MachineBasicBlock::instr_iterator MachineBasicBlock::getFirstInstrTerminator() {
   return I;
 }
 
+bool MachineBasicBlock::isReturnBlock() const {
+  return !empty() && back().isReturn();
+}
+
+bool MachineBasicBlock::isEHScopeReturnBlock() const {
+  return !empty() && back().isEHScopeReturn();
+}
+
 MachineBasicBlock::iterator
 MachineBasicBlock::getFirstNonDebugInstr(bool SkipPseudoOp) {
   // Skip over begin-of-block dbg_value instructions.
@@ -326,6 +334,64 @@ std::string MachineBasicBlock::getFullName() const {
   else
     Name += ("BB" + Twine(getNumber())).str();
   return Name;
+}
+
+MachineInstr &MachineBasicBlock::instr_front() { return Insts.front(); }
+
+MachineInstr &MachineBasicBlock::instr_back() { return Insts.back(); }
+
+const MachineInstr &MachineBasicBlock::instr_front() const {
+  return Insts.front();
+}
+
+const MachineInstr &MachineBasicBlock::instr_back() const {
+  return Insts.back();
+}
+
+MachineInstr &MachineBasicBlock::front() { return Insts.front(); }
+
+MachineInstr &MachineBasicBlock::back() { return *--end(); }
+
+const MachineInstr &MachineBasicBlock::front() const { return Insts.front(); }
+
+const MachineInstr &MachineBasicBlock::back() const { return *--end(); }
+
+MachineBasicBlock::instr_iterator MachineBasicBlock::instr_begin() { return Insts.begin(); }
+
+MachineBasicBlock::const_instr_iterator MachineBasicBlock::instr_begin() const {
+  return Insts.begin();
+}
+
+MachineBasicBlock::instr_iterator MachineBasicBlock::instr_end() { return Insts.end(); }
+
+MachineBasicBlock::const_instr_iterator MachineBasicBlock::instr_end() const {
+  return Insts.end();
+}
+
+MachineBasicBlock::reverse_instr_iterator MachineBasicBlock::instr_rbegin() {
+  return Insts.rbegin();
+}
+
+MachineBasicBlock::const_reverse_instr_iterator MachineBasicBlock::instr_rbegin() const {
+  return Insts.rbegin();
+}
+
+MachineBasicBlock::reverse_instr_iterator MachineBasicBlock::instr_rend() { return Insts.rend(); }
+
+MachineBasicBlock::const_reverse_instr_iterator MachineBasicBlock::instr_rend() const {
+  return Insts.rend();
+}
+
+MachineBasicBlock::iterator MachineBasicBlock::begin() { return instr_begin(); }
+
+MachineBasicBlock::const_iterator MachineBasicBlock::begin() const {
+  return instr_begin();
+}
+
+MachineBasicBlock::iterator MachineBasicBlock::end() { return instr_end(); }
+
+MachineBasicBlock::const_iterator MachineBasicBlock::end() const {
+  return instr_end();
 }
 
 void MachineBasicBlock::print(raw_ostream &OS, const SlotIndexes *Indexes,
@@ -1299,6 +1365,11 @@ MachineBasicBlock::erase(MachineBasicBlock::instr_iterator I) {
   return Insts.erase(I);
 }
 
+MachineInstr *MachineBasicBlock::remove(MachineInstr *I) {
+  assert(!I->isBundled() && "Cannot remove bundled instructions");
+  return Insts.remove(instr_iterator(I));
+}
+
 MachineInstr *MachineBasicBlock::remove_instr(MachineInstr *MI) {
   unbundleSingleMI(MI);
   MI->clearFlag(MachineInstr::BundledPred);
@@ -1316,6 +1387,32 @@ MachineBasicBlock::insert(instr_iterator I, MachineInstr *MI) {
     MI->setFlag(MachineInstr::BundledSucc);
   }
   return Insts.insert(I, MI);
+}
+
+MachineBasicBlock::iterator MachineBasicBlock::insert(iterator I,
+                                                      MachineInstr *MI) {
+  assertIteratorInBasicBlock(I);
+  assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
+         "Cannot insert instruction with bundle flags");
+  return Insts.insert(I.getInstrIterator(), MI);
+}
+
+MachineBasicBlock::iterator MachineBasicBlock::insertAfter(iterator I,
+                                                           MachineInstr *MI) {
+  assertIteratorInBasicBlock(I);
+  assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
+         "Cannot insert instruction with bundle flags");
+  return Insts.insertAfter(I.getInstrIterator(), MI);
+}
+
+MachineBasicBlock::instr_iterator
+MachineBasicBlock::insertAfterBundle(instr_iterator I, MachineInstr *MI) {
+  assertIteratorInBasicBlock(I);
+  assert(!MI->isBundledWithPred() && !MI->isBundledWithSucc() &&
+         "Cannot insert instruction with bundle flags");
+  while (I->isBundledWithSucc())
+    ++I;
+  return Insts.insertAfter(I, MI);
 }
 
 /// This method unlinks 'this' from the containing function, and returns it, but
@@ -1617,6 +1714,26 @@ MachineBasicBlock::liveout_iterator MachineBasicBlock::liveout_begin() const {
   }
 
   return liveout_iterator(*this, ExceptionPointer, ExceptionSelector, false);
+}
+
+void MachineBasicBlock::assertIteratorInBasicBlock(iterator I) {
+  assert((I == end() || I->getParent() == this) &&
+         "iterator points outside of basic block");
+}
+
+MachineInstrSpan::MachineInstrSpan(MachineBasicBlock::iterator I,
+                                   MachineBasicBlock *BB)
+    : MBB(*BB), I(I), B(I == MBB.begin() ? MBB.end() : std::prev(I)),
+      E(std::next(I)) {
+  assert(I == BB->end() || I->getParent() == BB);
+}
+
+bool llvm::instructionIsDebug(const MachineInstr &MI) {
+  return MI.isDebugInstr();
+}
+
+bool llvm::instructionIsPseudoProbe(const MachineInstr &MI) {
+  return MI.isPseudoProbe();
 }
 
 const MBBSectionID MBBSectionID::ColdSectionID(MBBSectionID::SectionType::Cold);

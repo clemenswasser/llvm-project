@@ -1031,6 +1031,14 @@ RegsForValue::getRegsAndSizes() const {
   return OutVec;
 }
 
+SelectionDAGBuilder::SelectionDAGBuilder(SelectionDAG &dag,
+                                         FunctionLoweringInfo &funcinfo,
+                                         SwiftErrorValueTracking &swifterror,
+                                         CodeGenOpt::Level ol)
+    : SDNodeOrder(LowestSDNodeOrder), TM(dag.getTarget()), DAG(dag),
+      SL(std::make_unique<SDAGSwitchLowering>(this, funcinfo)),
+      FuncInfo(funcinfo), SwiftError(swifterror) {}
+
 void SelectionDAGBuilder::init(GCFunctionInfo *gfi, AliasAnalysis *aa,
                                const TargetLibraryInfo *li) {
   AA = aa;

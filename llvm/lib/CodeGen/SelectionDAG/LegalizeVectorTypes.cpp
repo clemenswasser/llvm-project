@@ -21,6 +21,7 @@
 
 #include "LegalizeTypes.h"
 #include "llvm/Analysis/MemoryLocation.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TypeSize.h"

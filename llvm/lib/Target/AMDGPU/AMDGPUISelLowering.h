@@ -16,6 +16,7 @@
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUISELLOWERING_H
 
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
@@ -287,18 +288,12 @@ public:
                                Register Reg, EVT VT,
                                const SDLoc &SL,
                                bool RawReg = false) const;
-  SDValue CreateLiveInRegister(SelectionDAG &DAG,
-                               const TargetRegisterClass *RC,
-                               Register Reg, EVT VT) const {
-    return CreateLiveInRegister(DAG, RC, Reg, VT, SDLoc(DAG.getEntryNode()));
-  }
-
+  SDValue CreateLiveInRegister(SelectionDAG &DAG, const TargetRegisterClass *RC,
+                               Register Reg, EVT VT) const;
   // Returns the raw live in register rather than a copy from it.
   SDValue CreateLiveInRegisterRaw(SelectionDAG &DAG,
-                                  const TargetRegisterClass *RC,
-                                  Register Reg, EVT VT) const {
-    return CreateLiveInRegister(DAG, RC, Reg, VT, SDLoc(DAG.getEntryNode()), true);
-  }
+                                  const TargetRegisterClass *RC, Register Reg,
+                                  EVT VT) const;
 
   /// Similar to CreateLiveInRegister, except value maybe loaded from a stack
   /// slot rather than passed in a register.

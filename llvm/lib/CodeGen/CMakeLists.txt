@@ -252,6 +252,7 @@ add_llvm_component_library(LLVMCodeGen
   Core
   MC
   ProfileData
+  SelectionDAG
   Scalar
   Support
   Target

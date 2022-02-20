@@ -2728,6 +2728,13 @@ HexagonTargetLowering::contractPredicate(SDValue Vec64, const SDLoc &dl,
   return getInstr(Hexagon::S2_vtrunehb, dl, MVT::i32, {Vec64}, DAG);
 }
 
+SDValue HexagonTargetLowering::getInstr(unsigned MachineOpc, const SDLoc &dl,
+                                        MVT Ty, ArrayRef<SDValue> Ops,
+                                        SelectionDAG &DAG) const {
+  SDNode *N = DAG.getMachineNode(MachineOpc, dl, Ty, Ops);
+  return SDValue(N, 0);
+}
+
 SDValue
 HexagonTargetLowering::getZero(const SDLoc &dl, MVT Ty, SelectionDAG &DAG)
       const {

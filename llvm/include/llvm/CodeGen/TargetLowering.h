@@ -32,7 +32,6 @@
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/LowLevelType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetCallingConv.h"
 #include "llvm/CodeGen/ValueTypes.h"
@@ -559,24 +558,7 @@ public:
   /// dag combiner.
   virtual bool isLoadBitCastBeneficial(EVT LoadVT, EVT BitcastVT,
                                        const SelectionDAG &DAG,
-                                       const MachineMemOperand &MMO) const {
-    // Don't do if we could do an indexed load on the original type, but not on
-    // the new one.
-    if (!LoadVT.isSimple() || !BitcastVT.isSimple())
-      return true;
-
-    MVT LoadMVT = LoadVT.getSimpleVT();
-
-    // Don't bother doing this if it's just going to be promoted again later, as
-    // doing so might interfere with other combines.
-    if (getOperationAction(ISD::LOAD, LoadMVT) == Promote &&
-        getTypeToPromoteTo(ISD::LOAD, LoadMVT) == BitcastVT.getSimpleVT())
-      return false;
-
-    bool Fast = false;
-    return allowsMemoryAccess(*DAG.getContext(), DAG.getDataLayout(), BitcastVT,
-                              MMO, &Fast) && Fast;
-  }
+                                       const MachineMemOperand &MMO) const;
 
   /// Return true if the following transform is beneficial:
   /// (store (y (conv x)), y*)) -> (store x, (x*))
@@ -857,13 +839,7 @@ public:
   ///
   /// ValVT is the type of values that produced the boolean.
   SDValue promoteTargetBoolean(SelectionDAG &DAG, SDValue Bool,
-                               EVT ValVT) const {
-    SDLoc dl(Bool);
-    EVT BoolVT =
-        getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), ValVT);
-    ISD::NodeType ExtendCode = getExtendForContent(getBooleanContents(ValVT));
-    return DAG.getNode(ExtendCode, dl, BoolVT, Bool);
-  }
+                               EVT ValVT) const;
 
   /// Return target scheduling preference.
   Sched::Preference getSchedulingPreference() const {
@@ -2817,24 +2793,7 @@ public:
   /// form TargetOpcode::G_FMAD. \p N may be an TargetOpcode::G_FADD,
   /// TargetOpcode::G_FSUB, or an TargetOpcode::G_FMUL which will be
   /// distributed into an fadd/fsub.
-  virtual bool isFMADLegal(const MachineInstr &MI, LLT Ty) const {
-    assert((MI.getOpcode() == TargetOpcode::G_FADD ||
-            MI.getOpcode() == TargetOpcode::G_FSUB ||
-            MI.getOpcode() == TargetOpcode::G_FMUL) &&
-           "unexpected node in FMAD forming combine");
-    switch (Ty.getScalarSizeInBits()) {
-    case 16:
-      return isOperationLegal(TargetOpcode::G_FMAD, MVT::f16);
-    case 32:
-      return isOperationLegal(TargetOpcode::G_FMAD, MVT::f32);
-    case 64:
-      return isOperationLegal(TargetOpcode::G_FMAD, MVT::f64);
-    default:
-      break;
-    }
-
-    return false;
-  }
+  virtual bool isFMADLegal(const MachineInstr &MI, LLT Ty) const;
 
   /// Returns true if be combined with to form an ISD::FMAD. \p N may be an
   /// ISD::FADD, ISD::FSUB, or an ISD::FMUL which will be distributed into an
@@ -3814,17 +3773,7 @@ public:
   /// when the cost is cheaper.
   SDValue getCheaperNegatedExpression(SDValue Op, SelectionDAG &DAG,
                                       bool LegalOps, bool OptForSize,
-                                      unsigned Depth = 0) const {
-    NegatibleCost Cost = NegatibleCost::Expensive;
-    SDValue Neg =
-        getNegatedExpression(Op, DAG, LegalOps, OptForSize, Cost, Depth);
-    if (Neg && Cost == NegatibleCost::Cheaper)
-      return Neg;
-    // Remove the new created node to avoid the side effect to the DAG.
-    if (Neg && Neg->use_empty())
-      DAG.RemoveDeadNode(Neg.getNode());
-    return SDValue();
-  }
+                                      unsigned Depth = 0) const;
 
   /// This is the helper function to return the newly negated expression if
   /// the cost is not expensive.
@@ -3923,17 +3872,7 @@ public:
 
     // setCallee with target/module-specific attributes
     CallLoweringInfo &setLibCallee(CallingConv::ID CC, Type *ResultType,
-                                   SDValue Target, ArgListTy &&ArgsList) {
-      RetTy = ResultType;
-      Callee = Target;
-      CallConv = CC;
-      NumFixedArgs = ArgsList.size();
-      Args = std::move(ArgsList);
-
-      DAG.getTargetLoweringInfo().markLibCallAttributes(
-          &(DAG.getMachineFunction()), CC, Args);
-      return *this;
-    }
+                                   SDValue Target, ArgListTy &&ArgsList);
 
     CallLoweringInfo &setCallee(CallingConv::ID CC, Type *ResultType,
                                 SDValue Target, ArgListTy &&ArgsList) {
@@ -4483,9 +4422,7 @@ public:
   /// Return a target-dependent result if the input operand is not suitable for
   /// use with a square root estimate calculation.
   virtual SDValue getSqrtResultForDenormInput(SDValue Operand,
-                                              SelectionDAG &DAG) const {
-    return DAG.getConstantFP(0.0, SDLoc(Operand), Operand.getValueType());
-  }
+                                              SelectionDAG &DAG) const;
 
   //===--------------------------------------------------------------------===//
   // Legalization utility functions
@@ -4771,10 +4708,8 @@ public:
 
   /// Expands target specific indirect branch for the case of JumpTable
   /// expanasion.
-  virtual SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, SDValue Addr,
-                                         SelectionDAG &DAG) const {
-    return DAG.getNode(ISD::BRIND, dl, MVT::Other, Value, Addr);
-  }
+  virtual SDValue expandIndirectJTBranch(const SDLoc &dl, SDValue Value,
+                                         SDValue Addr, SelectionDAG &DAG) const;
 
   // seteq(x, 0) -> truncate(srl(ctlz(zext(x)), log2(#bits)))
   // If we're comparing for equality to zero and isCtlzFast is true, expose the

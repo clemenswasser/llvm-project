@@ -17,13 +17,14 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include <cassert>
 
 namespace llvm {
 
 class SelectionDAGBuilder;
+class SDValue;
 
 /// This class tracks both per-statepoint and per-selectiondag information.
 /// For each statepoint it tracks locations of it's gc valuess (incoming and
@@ -47,18 +48,9 @@ public:
   /// statepoint.  Will return SDValue() if this value hasn't been
   /// spilled.  Otherwise, the value has already been spilled and no
   /// further action is required by the caller.
-  SDValue getLocation(SDValue Val) {
-    auto I = Locations.find(Val);
-    if (I == Locations.end())
-      return SDValue();
-    return I->second;
-  }
+  SDValue getLocation(SDValue Val);
 
-  void setLocation(SDValue Val, SDValue Location) {
-    assert(!Locations.count(Val) &&
-           "Trying to allocate already allocated location");
-    Locations[Val] = Location;
-  }
+  void setLocation(SDValue Val, SDValue Location);
 
   /// Record the fact that we expect to encounter a given gc_relocate
   /// before the next statepoint.  If we don't see it, we'll report

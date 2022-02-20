@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/InlineAsm.h"
@@ -371,10 +372,7 @@ private:
     return Op.getOpcode() == ISD::UNDEF;
   }
   SDValue getInstr(unsigned MachineOpc, const SDLoc &dl, MVT Ty,
-                   ArrayRef<SDValue> Ops, SelectionDAG &DAG) const {
-    SDNode *N = DAG.getMachineNode(MachineOpc, dl, Ty, Ops);
-    return SDValue(N, 0);
-  }
+                   ArrayRef<SDValue> Ops, SelectionDAG &DAG) const;
   SDValue getZero(const SDLoc &dl, MVT Ty, SelectionDAG &DAG) const;
 
   using VectorPair = std::pair<SDValue, SDValue>;

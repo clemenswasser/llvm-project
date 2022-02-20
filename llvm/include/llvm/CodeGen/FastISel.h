@@ -512,10 +512,7 @@ protected:
   bool selectXRayCustomEvent(const CallInst *II);
   bool selectXRayTypedEvent(const CallInst *II);
 
-  bool shouldOptForSize(const MachineFunction *MF) const {
-    // TODO: Implement PGSO.
-    return MF->getFunction().hasOptSize();
-  }
+  bool shouldOptForSize(const MachineFunction *MF) const;
 
 private:
   /// Handle PHI nodes in successor blocks.
