@@ -14,8 +14,6 @@
 #define LLVM_LIB_TARGET_ARM_ARMBASEREGISTERINFO_H
 
 #include "MCTargetDesc/ARMBaseInfo.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCRegisterInfo.h"

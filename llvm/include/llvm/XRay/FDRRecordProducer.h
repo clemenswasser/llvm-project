@@ -8,7 +8,6 @@
 #ifndef LLVM_XRAY_FDRRECORDPRODUCER_H
 #define LLVM_XRAY_FDRRECORDPRODUCER_H
 
-#include "llvm/Support/Error.h"
 #include "llvm/XRay/FDRRecords.h"
 #include "llvm/XRay/XRayRecord.h"
 #include <memory>

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ExecutionEngine/Orc/TargetProcess/TargetExecutionUtils.h"
+#include "llvm/ADT/ArrayRef.h"
 
 #include <vector>
 

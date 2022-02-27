@@ -9,10 +9,9 @@
 #ifndef LLVM_OBJCOPY_OBJCOPY_H
 #define LLVM_OBJCOPY_OBJCOPY_H
 
-#include "llvm/Support/Error.h"
-
 namespace llvm {
 class raw_ostream;
+class Error;
 
 namespace object {
 class Archive;

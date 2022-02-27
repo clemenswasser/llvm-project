@@ -10,12 +10,13 @@
 #define LLVM_DEBUGINFO_CODEVIEW_DEBUGSUBSECTION_H
 
 #include "llvm/DebugInfo/CodeView/CodeView.h"
-#include "llvm/Support/Error.h"
 
 #include <cstdint>
 
 namespace llvm {
 class BinaryStreamWriter;
+class Error;
+
 namespace codeview {
 
 class DebugSubsectionRef {

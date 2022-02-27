@@ -13,12 +13,13 @@
 #ifndef LLVM_EXECUTIONENGINE_ORC_TARGETPROCESS_TARGETEXECUTIONUTILS_H
 #define LLVM_EXECUTIONENGINE_ORC_TARGETPROCESS_TARGETEXECUTIONUTILS_H
 
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
 
 namespace llvm {
+template <typename T> class ArrayRef;
+
 namespace orc {
 
 /// Run a main function, returning the result.
