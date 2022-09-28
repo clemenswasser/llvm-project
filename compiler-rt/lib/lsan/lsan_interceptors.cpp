@@ -24,15 +24,20 @@
 #include "sanitizer_common/sanitizer_platform_limits_netbsd.h"
 #include "sanitizer_common/sanitizer_platform_limits_posix.h"
 #if SANITIZER_POSIX
-#include "sanitizer_common/sanitizer_posix.h"
+#  include "sanitizer_common/sanitizer_posix.h"
 #endif
-#include "sanitizer_common/sanitizer_tls_get_addr.h"
+
+#if SANITIZER_WINDOWS
+#  include <Windows.h>
+#endif
+
+#include <stddef.h>
+
 #include "lsan.h"
 #include "lsan_allocator.h"
 #include "lsan_common.h"
 #include "lsan_thread.h"
-
-#include <stddef.h>
+#include "sanitizer_common/sanitizer_tls_get_addr.h"
 
 using namespace __lsan;
 
@@ -99,6 +104,11 @@ INTERCEPTOR(void *, realloc, void *ptr, uptr size) {
   return lsan_realloc(ptr, size, stack);
 }
 
+#  if SANITIZER_WINDOWS
+#    define LSAN_MAYBE_INTERCEPT_POSIX_MEMALIGN
+#    define LSAN_MAYBE_INTERCEPT_VALLOC
+#  else
+
 INTERCEPTOR(void*, reallocarray, void *q, uptr nmemb, uptr size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
@@ -111,11 +121,19 @@ INTERCEPTOR(int, posix_memalign, void **memptr, uptr alignment, uptr size) {
   return lsan_posix_memalign(memptr, alignment, size, stack);
 }
 
+#    define LSAN_MAYBE_INTERCEPT_POSIX_MEMALIGN \
+      INTERCEPT_FUNCTION(posix_memalign)
+
 INTERCEPTOR(void*, valloc, uptr size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_valloc(size, stack);
 }
+
+#    define LSAN_MAYBE_INTERCEPT_VALLOC INTERCEPT_FUNCTION(valloc)
+
+#  endif
+
 #endif  // !SANITIZER_APPLE
 
 #if SANITIZER_INTERCEPT_MEMALIGN
@@ -143,12 +161,19 @@ INTERCEPTOR(void *, __libc_memalign, uptr alignment, uptr size) {
 #endif  // SANITIZER_INTERCEPT___LIBC_MEMALIGN
 
 #if SANITIZER_INTERCEPT_ALIGNED_ALLOC
-INTERCEPTOR(void*, aligned_alloc, uptr alignment, uptr size) {
+#  if SANITIZER_WINDOWS
+#    define LSAN_ALIGNED_ALLOC_NAME _aligned_malloc
+#  else
+#    define LSAN_ALIGNED_ALLOC_NAME aligned_alloc
+#  endif
+
+INTERCEPTOR(void *, LSAN_ALIGNED_ALLOC_NAME, uptr alignment, uptr size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_aligned_alloc(alignment, size, stack);
 }
-#define LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC INTERCEPT_FUNCTION(aligned_alloc)
+#  define LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC \
+    INTERCEPT_FUNCTION(LSAN_ALIGNED_ALLOC_NAME)
 #else
 #define LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC
 #endif
@@ -244,9 +269,15 @@ INTERCEPTOR(int, mprobe, void *ptr) {
 // OS X we need to intercept them using their mangled names.
 #if !SANITIZER_APPLE
 
-INTERCEPTOR_ATTRIBUTE
+#    if SANITIZER_WINDOWS
+#      define INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
+#    else
+#      define INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE INTERCEPTOR_ATTRIBUTE
+#    endif
+
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void *operator new(size_t size) { OPERATOR_NEW_BODY(false /*nothrow*/); }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void *operator new[](size_t size) { OPERATOR_NEW_BODY(false /*nothrow*/); }
 INTERCEPTOR_ATTRIBUTE
 void *operator new(size_t size, std::nothrow_t const&)
@@ -254,10 +285,10 @@ void *operator new(size_t size, std::nothrow_t const&)
 INTERCEPTOR_ATTRIBUTE
 void *operator new[](size_t size, std::nothrow_t const&)
 { OPERATOR_NEW_BODY(true /*nothrow*/); }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void *operator new(size_t size, std::align_val_t align)
 { OPERATOR_NEW_BODY_ALIGN(false /*nothrow*/); }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void *operator new[](size_t size, std::align_val_t align)
 { OPERATOR_NEW_BODY_ALIGN(false /*nothrow*/); }
 INTERCEPTOR_ATTRIBUTE
@@ -267,25 +298,25 @@ INTERCEPTOR_ATTRIBUTE
 void *operator new[](size_t size, std::align_val_t align, std::nothrow_t const&)
 { OPERATOR_NEW_BODY_ALIGN(true /*nothrow*/); }
 
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete(void *ptr) NOEXCEPT { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete[](void *ptr) NOEXCEPT { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
 void operator delete(void *ptr, std::nothrow_t const&) { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
 void operator delete[](void *ptr, std::nothrow_t const &)
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete(void *ptr, size_t size) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete[](void *ptr, size_t size) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete(void *ptr, std::align_val_t) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete[](void *ptr, std::align_val_t) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
@@ -294,10 +325,10 @@ void operator delete(void *ptr, std::align_val_t, std::nothrow_t const&)
 INTERCEPTOR_ATTRIBUTE
 void operator delete[](void *ptr, std::align_val_t, std::nothrow_t const&)
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete(void *ptr, size_t size, std::align_val_t) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
-INTERCEPTOR_ATTRIBUTE
+INTERCEPTOR_ATTRIBUTE_DIFFERENT_LINKAGE
 void operator delete[](void *ptr, size_t size, std::align_val_t) NOEXCEPT
 { OPERATOR_DELETE_BODY; }
 
@@ -479,9 +510,25 @@ INTERCEPTOR(int, pthread_create, void *th, void *attr,
   return res;
 }
 
+#  define LSAN_MAYBE_INTERCEPT_PTHREAD_CREATE INTERCEPT_FUNCTION(pthread_create)
+
+#else
+#  define LSAN_MAYBE_INTERCEPT_PTHREAD_CREATE
+#endif
+
+#if SANITIZER_POSIX
+
 INTERCEPTOR(int, pthread_join, void *t, void **arg) {
   return REAL(pthread_join)(t, arg);
 }
+
+#  define LSAN_MAYBE_INTERCEPT_PTHREAD_CREATE INTERCEPT_FUNCTION(pthread_join)
+
+#else
+#  define LSAN_MAYBE_INTERCEPT_PTHREAD_JOIN
+#endif
+
+#if SANITIZER_POSIX
 
 DEFINE_REAL_PTHREAD_FUNCTIONS
 
@@ -490,17 +537,71 @@ INTERCEPTOR(void, _exit, int status) {
   REAL(_exit)(status);
 }
 
-#define COMMON_INTERCEPT_FUNCTION(name) INTERCEPT_FUNCTION(name)
-#include "sanitizer_common/sanitizer_signal_interceptors.inc"
+#  define LSAN_MAYBE_INTERCEPT__EXIT INTERCEPT_FUNCTION(_exit)
 
+#else
+#  define LSAN_MAYBE_INTERCEPT__EXIT
+#endif
+
+#if SANITIZER_POSIX
+#  define COMMON_INTERCEPT_FUNCTION(name) INTERCEPT_FUNCTION(name)
+#  include "sanitizer_common/sanitizer_signal_interceptors.inc"
 #endif  // SANITIZER_POSIX
+
+#if SANITIZER_WINDOWS
+
+INTERCEPTOR_WINAPI(void, ExitProcess, UINT uExitCode) {
+  if (HasReportedLeaks()) {
+    uExitCode = common_flags()->exitcode;
+  }
+  return REAL(ExitProcess)(uExitCode);
+}
+
+#  define LSAN_MAYBE_INTERCEPT_EXIT_PROCESS INTERCEPT_FUNCTION(ExitProcess)
+#else
+#  define LSAN_MAYBE_INTERCEPT_EXIT_PROCESS
+#endif
+
+#if SANITIZER_WINDOWS
+INTERCEPTOR_WINAPI(int, TerminateProcess, HANDLE hProcess, UINT uExitCode) {
+  if (HasReportedLeaks()) {
+    uExitCode = common_flags()->exitcode;
+  }
+  return REAL(TerminateProcess)(hProcess, uExitCode);
+}
+
+#  define LSAN_MAYBE_INTERCEPT_TERMINATE_PROCESS \
+    INTERCEPT_FUNCTION(TerminateProcess)
+
+#else
+#  define LSAN_MAYBE_INTERCEPT_TERMINATE_PROCESS
+#endif
+
+#if SANITIZER_WINDOWS
+INTERCEPTOR_WINAPI(HANDLE, CreateThread,
+                   LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize,
+                   LPTHREAD_START_ROUTINE lpStartAddress,
+                   __drv_aliasesMem LPVOID lpParameter, DWORD dwCreationFlags,
+                   LPDWORD lpThreadId) {
+  // TODO
+  return REAL(CreateThread)(lpThreadAttributes, dwStackSize, lpStartAddress,
+                            lpParameter, dwCreationFlags, lpThreadId);
+}
+
+#  define LSAN_MAYBE_INTERCEPT_CREATE_THREAD INTERCEPT_FUNCTION(CreateThread)
+
+#else
+#  define LSAN_MAYBE_INTERCEPT_CREATE_THREAD
+#endif
 
 namespace __lsan {
 
 void InitializeInterceptors() {
   // Fuchsia doesn't use interceptors that require any setup.
 #if !SANITIZER_FUCHSIA
+#  if SANITIZER_POSIX
   InitializeSignalInterceptors();
+#  endif
 
   INTERCEPT_FUNCTION(malloc);
   INTERCEPT_FUNCTION(free);
@@ -510,15 +611,15 @@ void InitializeInterceptors() {
   LSAN_MAYBE_INTERCEPT_MEMALIGN;
   LSAN_MAYBE_INTERCEPT___LIBC_MEMALIGN;
   LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC;
-  INTERCEPT_FUNCTION(posix_memalign);
-  INTERCEPT_FUNCTION(valloc);
+  LSAN_MAYBE_INTERCEPT_POSIX_MEMALIGN;
+  LSAN_MAYBE_INTERCEPT_VALLOC;
   LSAN_MAYBE_INTERCEPT_PVALLOC;
   LSAN_MAYBE_INTERCEPT_MALLOC_USABLE_SIZE;
   LSAN_MAYBE_INTERCEPT_MALLINFO;
   LSAN_MAYBE_INTERCEPT_MALLOPT;
-  INTERCEPT_FUNCTION(pthread_create);
-  INTERCEPT_FUNCTION(pthread_join);
-  INTERCEPT_FUNCTION(_exit);
+  LSAN_MAYBE_INTERCEPT_PTHREAD_CREATE;
+  LSAN_MAYBE_INTERCEPT_PTHREAD_JOIN;
+  LSAN_MAYBE_INTERCEPT__EXIT;
 
   LSAN_MAYBE_INTERCEPT__LWP_EXIT;
   LSAN_MAYBE_INTERCEPT_THR_EXIT;
@@ -529,14 +630,18 @@ void InitializeInterceptors() {
 
   LSAN_MAYBE_INTERCEPT_STRERROR;
 
-#if !SANITIZER_NETBSD && !SANITIZER_FREEBSD
+  LSAN_MAYBE_INTERCEPT_EXIT_PROCESS;
+  LSAN_MAYBE_INTERCEPT_TERMINATE_PROCESS;
+  LSAN_MAYBE_INTERCEPT_CREATE_THREAD;
+
+#  if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_WINDOWS
   if (pthread_key_create(&g_thread_finalize_key, &thread_finalize)) {
     Report("LeakSanitizer: failed to create thread key.\n");
     Die();
   }
-#endif
+#  endif
 
 #endif  // !SANITIZER_FUCHSIA
 }
 
-} // namespace __lsan
+}  // namespace __lsan
