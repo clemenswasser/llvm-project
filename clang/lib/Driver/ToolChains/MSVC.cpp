@@ -825,6 +825,7 @@ SanitizerMask MSVCToolChain::getSupportedSanitizers() const {
   Res |= SanitizerKind::PointerSubtract;
   Res |= SanitizerKind::Fuzzer;
   Res |= SanitizerKind::FuzzerNoLink;
+  Res |= SanitizerKind::Leak;
   Res &= ~SanitizerKind::CFIMFCall;
   return Res;
 }
