@@ -167,12 +167,15 @@ void StopTheWorld(StopTheWorldCallback callback, void *argument) {
   struct RunThreadArgs arg = {callback, argument};
   DWORD trace_thread_id;
 
-  auto trace_thread =
-      REAL(CreateThread)(nullptr, 0, RunThread, &arg, 0, &trace_thread_id);
-  CHECK(trace_thread);
-
-  WaitForSingleObject(trace_thread, INFINITE);
-  CloseHandle(trace_thread);
+  // TODO(cwasser): Spawning a tracer thread at this point causes a deadlock in
+  // malloc during thread creation.
+  //auto trace_thread =
+  //    REAL(CreateThread)(nullptr, 0, RunThread, &arg, 0, &trace_thread_id);
+  //CHECK(trace_thread);
+  //
+  //WaitForSingleObject(trace_thread, INFINITE);
+  //CloseHandle(trace_thread);
+  RunThread(&arg);
 }
 
 }  // namespace __sanitizer
