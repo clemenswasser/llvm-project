@@ -545,12 +545,16 @@ void ScanRootRegion(Frontier *frontier, const RootRegion &root_region,
 
 static void ProcessRootRegion(Frontier *frontier,
                               const RootRegion &root_region) {
+#  if SANITIZER_WINDOWS
+  // TODO
+#  else
   MemoryMappingLayout proc_maps(/*cache_enabled*/ true);
   MemoryMappedSegment segment;
   while (proc_maps.Next(&segment)) {
     ScanRootRegion(frontier, root_region, segment.start, segment.end,
                    segment.IsReadable());
   }
+#  endif
 }
 
 // Scans root regions for heap pointers.
