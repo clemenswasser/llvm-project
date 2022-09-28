@@ -224,6 +224,11 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  if (TC.getSanitizerArgs(Args).needsLsanRt()) {
+    // TODO: Is this all? Asan looks way more complicated
+    CmdArgs.push_back(TC.getCompilerRTArgString(Args, "lsan"));
+  }
+
   Args.AddAllArgValues(CmdArgs, options::OPT__SLASH_link);
 
   // Control Flow Guard checks
