@@ -769,7 +769,11 @@ static bool CheckForLeaks() {
     // CheckForLeaks which does not use bytes with pointers before the
     // threads are suspended and stack pointers captured.
     param.caller_tid = GetTid();
+#if _MSC_VER
+    param.caller_sp = reinterpret_cast<uptr>(_AddressOfReturnAddress());
+#else
     param.caller_sp = reinterpret_cast<uptr>(__builtin_frame_address(0));
+#endif
     LockStuffAndStopTheWorld(CheckForLeaksCallback, &param);
     if (!param.success) {
       Report("LeakSanitizer has encountered a fatal error.\n");
