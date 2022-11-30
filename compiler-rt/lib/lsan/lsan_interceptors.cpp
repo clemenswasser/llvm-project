@@ -563,7 +563,7 @@ INTERCEPTOR_WINAPI(void, ExitProcess, UINT uExitCode) {
 #endif
 
 #if SANITIZER_WINDOWS
-INTERCEPTOR_WINAPI(int, TerminateProcess, HANDLE hProcess, UINT uExitCode) {
+INTERCEPTOR_WINAPI(BOOL, TerminateProcess, HANDLE hProcess, UINT uExitCode) {
   if (HasReportedLeaks()) {
     uExitCode = common_flags()->exitcode;
   }

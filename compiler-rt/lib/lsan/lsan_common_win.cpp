@@ -25,7 +25,7 @@
 
 namespace __lsan {
 
-// TODO: Intercepting `ExitProcess` doesn't currently work
+// TODO(cwasser): Intercepting `ExitProcess` doesn't currently work
 void HandleLeaks() {
   if (common_flags()->exitcode)
     Die();

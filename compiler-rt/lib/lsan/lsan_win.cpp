@@ -33,7 +33,7 @@ struct OnStartedArgs {
 };
 
 void ThreadContext::OnStarted(void *arg) {
-  auto args = reinterpret_cast<const OnStartedArgs *>(arg);
+  auto const *args = reinterpret_cast<const OnStartedArgs *>(arg);
   stack_begin_ = args->stack_begin;
   stack_end_ = args->stack_end;
   cache_begin_ = args->cache_begin;
