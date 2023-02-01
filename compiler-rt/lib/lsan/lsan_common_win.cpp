@@ -35,11 +35,8 @@ void InitializePlatformSpecificModules() {}
 
 void LockStuffAndStopTheWorld(StopTheWorldCallback callback,
                               CheckForLeaksParam *argument) {
-  LockThreadRegistry();
-  LockAllocator();
+  ScopedStopTheWorldLock lock;
   StopTheWorld(callback, argument);
-  UnlockAllocator();
-  UnlockThreadRegistry();
 }
 
 THREADLOCAL int disable_counter = 0;
