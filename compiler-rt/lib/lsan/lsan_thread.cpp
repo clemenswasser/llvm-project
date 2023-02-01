@@ -89,14 +89,19 @@ ThreadRegistry *GetLsanThreadRegistryLocked() {
 }
 
 void GetRunningThreadsLocked(InternalMmapVector<tid_t> *threads) {
+  struct Args {
+    InternalMmapVector<tid_t> *threads;
+    ThreadContextBase *current_thread_ctx;
+  } args{threads, CurrentThreadContext()};
+
   GetLsanThreadRegistryLocked()->RunCallbackForEachThreadLocked(
-      [](ThreadContextBase *tctx, void *threads) {
-        if (tctx->status == ThreadStatusRunning) {
-          reinterpret_cast<InternalMmapVector<tid_t> *>(threads)->push_back(
-              tctx->os_id);
+      [](ThreadContextBase *tctx, void *args) {
+        if (tctx != reinterpret_cast<Args *>(args)->current_thread_ctx &&
+            tctx->status == ThreadStatusRunning) {
+          reinterpret_cast<Args *>(args)->threads->push_back(tctx->os_id);
         }
       },
-      threads);
+      &args);
 }
 
 }  // namespace __lsan
