@@ -633,7 +633,7 @@ void InitializeInterceptors() {
   // FIXME(cwasser): Intercept Win32 functions
   //LSAN_MAYBE_INTERCEPT_EXIT_PROCESS;
   //LSAN_MAYBE_INTERCEPT_TERMINATE_PROCESS;
-  //LSAN_MAYBE_INTERCEPT_CREATE_THREAD;
+  LSAN_MAYBE_INTERCEPT_CREATE_THREAD;
 
 #  if !SANITIZER_NETBSD && !SANITIZER_FREEBSD && !SANITIZER_WINDOWS
   if (pthread_key_create(&g_thread_finalize_key, &thread_finalize)) {
