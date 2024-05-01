@@ -661,6 +661,11 @@ static size_t GetInstructionSize(uptr address, size_t* rel_offset = nullptr) {
       return 6;
   }
 
+  switch (0x00000000FFFFFF & *(u64 *)address) {
+    case 0x15FF48:  // 48 FF 15 XX XX XX XX : call qword ptr [XXXXXXXX]
+      return 7;
+  }
+
 #else
 
   switch (*(u8*)address) {
