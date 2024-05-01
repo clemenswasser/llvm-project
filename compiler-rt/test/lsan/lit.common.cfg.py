@@ -93,7 +93,7 @@ config.substitutions.append(("%clangxx_hwasan ", build_invocation(clang_lsan_cxx
 
 
 # LeakSanitizer tests are currently supported on
-# Android{aarch64, x86, x86_64}, x86-64 Linux, PowerPC64 Linux, arm Linux, mips64 Linux, s390x Linux, loongarch64 Linux and x86_64 Darwin.
+# Windows{x86_64, x86, aarch64, arm}, Android{aarch64, x86, x86_64}, x86-64 Linux, PowerPC64 Linux, arm Linux, mips64 Linux, s390x Linux, loongarch64 Linux and x86_64 Darwin.
 supported_android = (
     config.android
     and config.target_arch in ["x86_64", "i386", "aarch64"]
@@ -122,7 +122,19 @@ supported_netbsd = config.host_os == "NetBSD" and config.target_arch in [
     "x86_64",
     "i386",
 ]
-if not (supported_android or supported_linux or supported_darwin or supported_netbsd):
+supported_windows = config.host_os == "Windows" and config.target_arch in [
+    "x86_64",
+    "i386",
+    "aarch64",
+    "arm",
+]
+if not (
+    supported_android
+    or supported_linux
+    or supported_darwin
+    or supported_netbsd
+    or supported_windows
+):
     config.unsupported = True
 
 # Don't support Thumb due to broken fast unwinder

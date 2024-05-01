@@ -39,8 +39,8 @@ void InitializeAllocator();
 const bool kAlwaysClearMemory = true;
 
 struct ChunkMetadata {
-  u8 allocated : 8;  // Must be first.
-  ChunkTag tag : 2;
+  uptr allocated : 8;  // Must be first.
+  uptr tag : 2;        // ChunkTag
 #if SANITIZER_WORDSIZE == 64
   uptr requested_size : 54;
 #else

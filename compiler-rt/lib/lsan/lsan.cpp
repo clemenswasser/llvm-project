@@ -101,7 +101,9 @@ extern "C" void __lsan_init() {
   InstallDeadlySignalHandlers(LsanOnDeadlySignal);
   InitializeMainThread();
   InstallAtExitCheckLeaks();
+#if !SANITIZER_WINDOWS
   InstallAtForkHandler();
+#endif
 
   InitializeCoverage(common_flags()->coverage, common_flags()->coverage_dir);
 

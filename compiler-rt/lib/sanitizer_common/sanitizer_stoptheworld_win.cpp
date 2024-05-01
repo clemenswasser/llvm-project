@@ -19,7 +19,13 @@
 // windows.h needs to be included before tlhelp32.h
 #  include <tlhelp32.h>
 
+#  include "interception/interception.h"
+
 #  include "sanitizer_stoptheworld.h"
+
+DECLARE_REAL(HANDLE, CreateThread, LPSECURITY_ATTRIBUTES lpThreadAttributes,
+             SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress,
+             LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
 
 namespace __sanitizer {
 
@@ -147,7 +153,7 @@ DWORD WINAPI RunThread(void *argument) {
   run_args->callback(suspended_threads_list, run_args->argument);
 
   // Resume all Threads
-  for (const auto suspended_thread_handle :
+  for (auto *const suspended_thread_handle :
        suspended_threads_list.threadHandles) {
     CHECK_NE(ResumeThread(suspended_thread_handle), -1);
     CloseHandle(suspended_thread_handle);
@@ -162,12 +168,15 @@ void StopTheWorld(StopTheWorldCallback callback, void *argument) {
   struct RunThreadArgs arg = {callback, argument};
   DWORD trace_thread_id;
 
-  auto trace_thread =
-      CreateThread(nullptr, 0, RunThread, &arg, 0, &trace_thread_id);
-  CHECK(trace_thread);
-
-  WaitForSingleObject(trace_thread, INFINITE);
-  CloseHandle(trace_thread);
+  // TODO(cwasser): Spawning a tracer thread at this point causes a deadlock in
+  // malloc during thread creation.
+  // auto trace_thread =
+  //    REAL(CreateThread)(nullptr, 0, RunThread, &arg, 0, &trace_thread_id);
+  // CHECK(trace_thread);
+  //
+  // WaitForSingleObject(trace_thread, INFINITE);
+  // CloseHandle(trace_thread);
+  RunThread(&arg);
 }
 
 }  // namespace __sanitizer

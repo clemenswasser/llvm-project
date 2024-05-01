@@ -15,7 +15,7 @@ void print_address(const char *str, int n, ...) {
     defined(__loongarch_lp64)
     // On FreeBSD, the %p conversion specifier works as 0x%x and thus does not
     // match to the format used in the diagnotic message.
-    fprintf(stderr, "0x%012lx ", (unsigned long) p);
+    fprintf(stderr, "0x%012llx ", (unsigned long long)p);
 #elif defined(__i386__) || defined(__arm__)
     fprintf(stderr, "0x%08lx ", (unsigned long) p);
 #elif defined(__mips64)

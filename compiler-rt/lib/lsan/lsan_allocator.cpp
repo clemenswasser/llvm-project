@@ -312,7 +312,8 @@ bool LsanMetadata::allocated() const {
 }
 
 ChunkTag LsanMetadata::tag() const {
-  return reinterpret_cast<ChunkMetadata *>(metadata_)->tag;
+  return static_cast<ChunkTag>(
+      reinterpret_cast<ChunkMetadata *>(metadata_)->tag);
 }
 
 void LsanMetadata::set_tag(ChunkTag value) {
