@@ -165,7 +165,7 @@ public:
     // enough. We have to find the COPY defines Reg or registers defined by Reg
     // and invalidate all of them. Similarly, we must invalidate all of the
     // the subregisters used in the source of the COPY.
-    SmallSet<MCRegUnit, 8> RegUnitsToInvalidate;
+    SmallDenseSet<MCRegUnit, 8> RegUnitsToInvalidate;
     auto InvalidateCopy = [&](MachineInstr *MI) {
       std::optional<DestSourcePair> CopyOperands =
           isCopyInstr(*MI, TII, UseCopyInstr);
