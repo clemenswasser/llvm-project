@@ -323,7 +323,7 @@ bool LiveVariables::HandlePhysRegKill(Register Reg, MachineInstr *MI) {
   // AX =
   MachineInstr *LastPartDef = nullptr;
   unsigned LastPartDefDist = 0;
-  SmallSet<unsigned, 8> PartUses;
+  SmallDenseSet<unsigned, 8> PartUses;
   for (MCPhysReg SubReg : TRI->subregs(Reg)) {
     MachineInstr *Def = PhysRegDef[SubReg];
     if (Def && Def != LastDef) {
@@ -429,7 +429,7 @@ void LiveVariables::HandleRegMask(const MachineOperand &MO, unsigned NumRegs) {
 void LiveVariables::HandlePhysRegDef(Register Reg, MachineInstr *MI,
                                      SmallVectorImpl<Register> &Defs) {
   // What parts of the register are previously defined?
-  SmallSet<unsigned, 32> Live;
+  SmallDenseSet<unsigned, 32> Live;
   if (PhysRegDef[Reg.id()] || PhysRegUse[Reg.id()]) {
     Live.insert_range(TRI->subregs_inclusive(Reg));
   } else {
