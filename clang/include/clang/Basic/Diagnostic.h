@@ -32,7 +32,6 @@
 #include <cstdint>
 #include <limits>
 #include <list>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -471,10 +470,12 @@ private:
       /// The diagnostic state for the parent file. This is strictly redundant,
       /// as looking up the DecomposedIncludedLoc for the FileID in the Files
       /// map would give us this, but we cache it here for performance.
-      File *Parent = nullptr;
+      FileID ParentID;
 
       /// The offset of this file within its parent.
       unsigned ParentOffset = 0;
+
+      bool HasParent = false;
 
       /// Whether this file has any local (not imported from an AST file)
       /// diagnostic state transitions.
@@ -488,7 +489,8 @@ private:
     };
 
     /// The diagnostic states for each file.
-    mutable std::map<FileID, File> Files;
+    mutable llvm::SmallDenseMap<FileID, File> Files;
+    mutable File RootFile;
 
     /// The initial diagnostic state.
     DiagState *FirstDiagState;
