@@ -322,31 +322,35 @@ bool CXXRecordDecl::lookupInBases(BaseMatchesCallback BaseMatches,
   //
   // FIXME: This is an O(N^2) algorithm, but DPG doesn't see an easy
   // way to make it any faster.
-  Paths.Paths.remove_if([&Paths](const CXXBasePath &Path) {
-    for (const CXXBasePathElement &PE : Path) {
-      if (!PE.Base->isVirtual())
-        continue;
+  Paths.Paths.erase(
+      std::remove_if(
+          Paths.Paths.begin(), Paths.Paths.end(),
+          [&Paths](const CXXBasePath &Path) {
+            for (const CXXBasePathElement &PE : Path) {
+              if (!PE.Base->isVirtual())
+                continue;
 
-      auto *VBase = PE.Base->getType()->getAsCXXRecordDecl();
-      if (!VBase)
-        break;
+              auto *VBase = PE.Base->getType()->getAsCXXRecordDecl();
+              if (!VBase)
+                break;
 
-      // The declaration(s) we found along this path were found in a
-      // subobject of a virtual base. Check whether this virtual
-      // base is a subobject of any other path; if so, then the
-      // declaration in this path are hidden by that patch.
-      for (const CXXBasePath &HidingP : Paths) {
-        auto *HidingClass =
-            HidingP.back().Base->getType()->getAsCXXRecordDecl();
-        if (!HidingClass)
-          break;
+              // The declaration(s) we found along this path were found in a
+              // subobject of a virtual base. Check whether this virtual
+              // base is a subobject of any other path; if so, then the
+              // declaration in this path are hidden by that patch.
+              for (const CXXBasePath &HidingP : Paths) {
+                auto *HidingClass =
+                    HidingP.back().Base->getType()->getAsCXXRecordDecl();
+                if (!HidingClass)
+                  break;
 
-        if (HidingClass->isVirtuallyDerivedFrom(VBase))
-          return true;
-      }
-    }
-    return false;
-  });
+                if (HidingClass->isVirtuallyDerivedFrom(VBase))
+                  return true;
+              }
+            }
+            return false;
+          }),
+      Paths.Paths.end());
 
   return true;
 }
