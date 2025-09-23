@@ -3350,16 +3350,20 @@ void ASTWriter::WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag,
 
   // Emit the state transitions.
   unsigned NumLocations = 0;
-  for (auto &FileIDAndFile : Diag.DiagStatesByLoc.Files) {
+  for (auto &FileIDAndFile : Diag.DiagStatesByLoc.FileIDToIndex) {
     if (!FileIDAndFile.first.isValid() ||
-        !FileIDAndFile.second.HasLocalTransitions)
+        !Diag.DiagStatesByLoc.FileStorage[FileIDAndFile.second]
+             .HasLocalTransitions)
       continue;
     ++NumLocations;
 
     AddFileID(FileIDAndFile.first, Record);
 
-    Record.push_back(FileIDAndFile.second.StateTransitions.size());
-    for (auto &StatePoint : FileIDAndFile.second.StateTransitions) {
+    auto const &StateTransitions =
+        Diag.DiagStatesByLoc.FileStorage[FileIDAndFile.second].StateTransitions;
+
+    Record.push_back(StateTransitions.size());
+    for (auto &StatePoint : StateTransitions) {
       Record.push_back(getAdjustedOffset(StatePoint.Offset));
       AddDiagState(StatePoint.State, false);
     }

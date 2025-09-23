@@ -32,7 +32,6 @@
 #include <cstdint>
 #include <limits>
 #include <list>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -426,12 +425,13 @@ private:
     DiagState *lookup(SourceManager &SrcMgr, SourceLocation Loc) const;
 
     /// Determine whether this map is empty.
-    bool empty() const { return Files.empty(); }
+    bool empty() const { return FileIDToIndex.empty(); }
 
     /// Clear out this map.
     void clear(bool Soft) {
       // Just clear the cache when in soft mode.
-      Files.clear();
+      FileIDToIndex.clear();
+      FileStorage.clear();
       if (!Soft) {
         FirstDiagState = CurDiagState = nullptr;
         CurDiagStateLoc = SourceLocation();
@@ -471,10 +471,13 @@ private:
       /// The diagnostic state for the parent file. This is strictly redundant,
       /// as looking up the DecomposedIncludedLoc for the FileID in the Files
       /// map would give us this, but we cache it here for performance.
-      File *Parent = nullptr;
+      uint32_t Parent;
 
       /// The offset of this file within its parent.
       unsigned ParentOffset = 0;
+
+      /// Whether this file has a parent file.
+      bool HasParent = false;
 
       /// Whether this file has any local (not imported from an AST file)
       /// diagnostic state transitions.
@@ -488,7 +491,8 @@ private:
     };
 
     /// The diagnostic states for each file.
-    mutable std::map<FileID, File> Files;
+    mutable llvm::SmallDenseMap<FileID, uint32_t> FileIDToIndex;
+    mutable llvm::SmallVector<File> FileStorage;
 
     /// The initial diagnostic state.
     DiagState *FirstDiagState;
@@ -500,7 +504,7 @@ private:
     SourceLocation CurDiagStateLoc;
 
     /// Get the diagnostic state information for a file.
-    File *getFile(SourceManager &SrcMgr, FileID ID) const;
+    uint32_t getFile(SourceManager &SrcMgr, FileID ID) const;
   };
 
   DiagStateMap DiagStatesByLoc;

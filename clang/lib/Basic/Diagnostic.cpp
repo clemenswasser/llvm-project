@@ -162,7 +162,7 @@ DiagnosticsEngine::DiagState::getOrAddMapping(diag::kind Diag) {
 }
 
 void DiagnosticsEngine::DiagStateMap::appendFirst(DiagState *State) {
-  assert(Files.empty() && "not first");
+  assert(FileIDToIndex.empty() && "not first");
   FirstDiagState = CurDiagState = State;
   CurDiagStateLoc = SourceLocation();
 }
@@ -175,8 +175,9 @@ void DiagnosticsEngine::DiagStateMap::append(SourceManager &SrcMgr,
 
   FileIDAndOffset Decomp = SrcMgr.getDecomposedLoc(Loc);
   unsigned Offset = Decomp.second;
-  for (File *F = getFile(SrcMgr, Decomp.first); F;
-       Offset = F->ParentOffset, F = F->Parent) {
+  for (File *F = &FileStorage[getFile(SrcMgr, Decomp.first)]; F;
+       Offset = F->ParentOffset,
+            F = F->HasParent ? &FileStorage[F->Parent] : nullptr) {
     F->HasLocalTransitions = true;
     auto &Last = F->StateTransitions.back();
     assert(Last.Offset <= Offset && "state transitions added out of order");
@@ -196,12 +197,11 @@ DiagnosticsEngine::DiagState *
 DiagnosticsEngine::DiagStateMap::lookup(SourceManager &SrcMgr,
                                         SourceLocation Loc) const {
   // Common case: we have not seen any diagnostic pragmas.
-  if (Files.empty())
+  if (FileIDToIndex.empty())
     return FirstDiagState;
 
   FileIDAndOffset Decomp = SrcMgr.getDecomposedLoc(Loc);
-  const File *F = getFile(SrcMgr, Decomp.first);
-  return F->lookup(Decomp.second);
+  return FileStorage[getFile(SrcMgr, Decomp.first)].lookup(Decomp.second);
 }
 
 DiagnosticsEngine::DiagState *
@@ -214,23 +214,9 @@ DiagnosticsEngine::DiagStateMap::File::lookup(unsigned Offset) const {
   return OnePastIt[-1].State;
 }
 
-DiagnosticsEngine::DiagStateMap::File *
-DiagnosticsEngine::DiagStateMap::getFile(SourceManager &SrcMgr,
-                                         FileID ID) const {
-  // Get or insert the File for this ID.
-  auto Range = Files.equal_range(ID);
-  if (Range.first != Range.second)
-    return &Range.first->second;
-  auto &F = Files.insert(Range.first, std::make_pair(ID, File()))->second;
-
-  // We created a new File; look up the diagnostic state at the start of it and
-  // initialize it.
-  if (ID.isValid()) {
-    FileIDAndOffset Decomp = SrcMgr.getDecomposedIncludedLoc(ID);
-    F.Parent = getFile(SrcMgr, Decomp.first);
-    F.ParentOffset = Decomp.second;
-    F.StateTransitions.push_back({F.Parent->lookup(Decomp.second), 0});
-  } else {
+uint32_t DiagnosticsEngine::DiagStateMap::getFile(SourceManager &SrcMgr,
+                                                  FileID ID) const {
+  if (FileStorage.empty()) {
     // This is the (imaginary) root file into which we pretend all top-level
     // files are included; it descends from the initial state.
     //
@@ -238,9 +224,34 @@ DiagnosticsEngine::DiagStateMap::getFile(SourceManager &SrcMgr,
     // isBeforeInTranslationUnit in the cases where someone invented another
     // top-level file and added diagnostic pragmas to it. See the code at the
     // end of isBeforeInTranslationUnit for the quirks it deals with.
-    F.StateTransitions.push_back({FirstDiagState, 0});
+    auto &F = FileStorage.emplace_back();
+    F.StateTransitions.emplace_back(FirstDiagState, 0);
   }
-  return &F;
+
+  if (ID.isInvalid()) {
+    return 0;
+  }
+
+  const size_t NewFileIdx = FileStorage.size();
+  {
+    // Get or insert the File for this ID.
+    auto [It, Inserted] = FileIDToIndex.try_emplace(ID, NewFileIdx);
+    if (!Inserted)
+      return It->second;
+  }
+
+  // We created a new File; look up the diagnostic state at the start of it and
+  // initialize it.
+  FileStorage.emplace_back();
+  FileIDAndOffset Decomp = SrcMgr.getDecomposedIncludedLoc(ID);
+  const uint32_t Parent = getFile(SrcMgr, Decomp.first);
+  File &F = FileStorage[NewFileIdx];
+  F.Parent = Parent;
+  F.HasParent = true;
+  F.ParentOffset = Decomp.second;
+  F.StateTransitions.emplace_back(FileStorage[Parent].lookup(Decomp.second), 0);
+
+  return NewFileIdx;
 }
 
 void DiagnosticsEngine::DiagStateMap::dump(SourceManager &SrcMgr,
@@ -249,9 +260,9 @@ void DiagnosticsEngine::DiagStateMap::dump(SourceManager &SrcMgr,
   CurDiagStateLoc.print(llvm::errs(), SrcMgr);
   llvm::errs() << ": " << CurDiagState << "\n";
 
-  for (auto &F : Files) {
+  for (auto &F : FileIDToIndex) {
     FileID ID = F.first;
-    File &File = F.second;
+    File &File = FileStorage[F.second];
 
     bool PrintedOuterHeading = false;
     auto PrintOuterHeading = [&] {
@@ -262,10 +273,10 @@ void DiagnosticsEngine::DiagStateMap::dump(SourceManager &SrcMgr,
       llvm::errs() << "File " << &File << " <FileID " << ID.getHashValue()
                    << ">: " << SrcMgr.getBufferOrFake(ID).getBufferIdentifier();
 
-      if (F.second.Parent) {
+      if (File.HasParent) {
         FileIDAndOffset Decomp = SrcMgr.getDecomposedIncludedLoc(ID);
         assert(File.ParentOffset == Decomp.second);
-        llvm::errs() << " parent " << File.Parent << " <FileID "
+        llvm::errs() << " parent " << &FileStorage[File.Parent] << " <FileID "
                      << Decomp.first.getHashValue() << "> ";
         SrcMgr.getLocForStartOfFile(Decomp.first)
             .getLocWithOffset(Decomp.second)
