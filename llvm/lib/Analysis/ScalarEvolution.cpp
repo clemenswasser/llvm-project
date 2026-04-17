@@ -2660,7 +2660,9 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<SCEVUse> &Ops,
   if (Depth > MaxArithDepth || hasHugeExpression(Ops))
     return getOrCreateAddExpr(Ops, ComputeFlags(Ops));
 
-  if (SCEV *S = findExistingSCEVInCache(scAddExpr, Ops)) {
+  FoldingSetNodeID ID;
+  void *InsertPos = nullptr;
+  if (SCEV *S = findExistingSCEVInCache(scAddExpr, Ops, ID, InsertPos)) {
     // Don't strengthen flags if we have no new information.
     SCEVAddExpr *Add = static_cast<SCEVAddExpr *>(S);
     if (Add->getNoWrapFlags(OrigFlags) != OrigFlags)
@@ -3090,21 +3092,18 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<SCEVUse> &Ops,
 const SCEV *ScalarEvolution::getOrCreateAddExpr(ArrayRef<SCEVUse> Ops,
                                                 SCEV::NoWrapFlags Flags) {
   FoldingSetNodeID ID;
-  ID.AddInteger(scAddExpr);
-  for (const SCEV *Op : Ops)
-    ID.AddPointer(Op);
-  void *IP = nullptr;
-  SCEVAddExpr *S =
-      static_cast<SCEVAddExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
-  if (!S) {
-    SCEVUse *O = SCEVAllocator.Allocate<SCEVUse>(Ops.size());
-    llvm::uninitialized_copy(Ops, O);
-    S = new (SCEVAllocator)
-        SCEVAddExpr(ID.Intern(SCEVAllocator), O, Ops.size());
-    UniqueSCEVs.InsertNode(S, IP);
-    S->computeAndSetCanonical(*this);
-    registerUser(S, Ops);
+  void *InsertPos = nullptr;
+  if (auto *S = findExistingSCEVInCache(scAddExpr, Ops, ID, InsertPos)) {
+    cast<SCEVAddExpr>(S)->setNoWrapFlags(Flags);
+    return S;
   }
+  SCEVUse *O = SCEVAllocator.Allocate<SCEVUse>(Ops.size());
+  llvm::uninitialized_copy(Ops, O);
+  auto *S =
+      new (SCEVAllocator) SCEVAddExpr(ID.Intern(SCEVAllocator), O, Ops.size());
+  UniqueSCEVs.InsertNode(S, InsertPos);
+  S->computeAndSetCanonical(*this);
+  registerUser(S, Ops);
   S->setNoWrapFlags(Flags);
   return S;
 }
@@ -3137,21 +3136,18 @@ const SCEV *ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<SCEVUse> Ops,
 const SCEV *ScalarEvolution::getOrCreateMulExpr(ArrayRef<SCEVUse> Ops,
                                                 SCEV::NoWrapFlags Flags) {
   FoldingSetNodeID ID;
-  ID.AddInteger(scMulExpr);
-  for (const SCEV *Op : Ops)
-    ID.AddPointer(Op);
-  void *IP = nullptr;
-  SCEVMulExpr *S =
-    static_cast<SCEVMulExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
-  if (!S) {
-    SCEVUse *O = SCEVAllocator.Allocate<SCEVUse>(Ops.size());
-    llvm::uninitialized_copy(Ops, O);
-    S = new (SCEVAllocator) SCEVMulExpr(ID.Intern(SCEVAllocator),
-                                        O, Ops.size());
-    UniqueSCEVs.InsertNode(S, IP);
-    S->computeAndSetCanonical(*this);
-    registerUser(S, Ops);
+  void *InsertPos = nullptr;
+  if (auto *S = findExistingSCEVInCache(scMulExpr, Ops, ID, InsertPos)) {
+    cast<SCEVMulExpr>(S)->setNoWrapFlags(Flags);
+    return S;
   }
+  SCEVUse *O = SCEVAllocator.Allocate<SCEVUse>(Ops.size());
+  llvm::uninitialized_copy(Ops, O);
+  auto *S =
+      new (SCEVAllocator) SCEVMulExpr(ID.Intern(SCEVAllocator), O, Ops.size());
+  UniqueSCEVs.InsertNode(S, InsertPos);
+  S->computeAndSetCanonical(*this);
+  registerUser(S, Ops);
   S->setNoWrapFlags(Flags);
   return S;
 }
@@ -3243,7 +3239,9 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<SCEVUse> &Ops,
   if (Depth > MaxArithDepth || hasHugeExpression(Ops))
     return getOrCreateMulExpr(Ops, ComputeFlags(Ops));
 
-  if (SCEV *S = findExistingSCEVInCache(scMulExpr, Ops)) {
+  FoldingSetNodeID ID;
+  void *InsertPos = nullptr;
+  if (SCEV *S = findExistingSCEVInCache(scMulExpr, Ops, ID, InsertPos)) {
     // Don't strengthen flags if we have no new information.
     SCEVMulExpr *Mul = static_cast<SCEVMulExpr *>(S);
     if (Mul->getNoWrapFlags(OrigFlags) != OrigFlags)
@@ -3973,21 +3971,35 @@ const SCEV *ScalarEvolution::getGEPExpr(SCEVUse BaseExpr,
 SCEV *ScalarEvolution::findExistingSCEVInCache(SCEVTypes SCEVType,
                                                ArrayRef<const SCEV *> Ops) {
   FoldingSetNodeID ID;
-  ID.AddInteger(SCEVType);
-  for (const SCEV *Op : Ops)
-    ID.AddPointer(Op);
-  void *IP = nullptr;
-  return UniqueSCEVs.FindNodeOrInsertPos(ID, IP);
+  void *InsertPos = nullptr;
+  return findExistingSCEVInCache(SCEVType, Ops, ID, InsertPos);
 }
 
 SCEV *ScalarEvolution::findExistingSCEVInCache(SCEVTypes SCEVType,
                                                ArrayRef<SCEVUse> Ops) {
   FoldingSetNodeID ID;
+  void *InsertPos = nullptr;
+  return findExistingSCEVInCache(SCEVType, Ops, ID, InsertPos);
+}
+
+SCEV *ScalarEvolution::findExistingSCEVInCache(SCEVTypes SCEVType,
+                                               ArrayRef<const SCEV *> Ops,
+                                               FoldingSetNodeID &ID,
+                                               void *&InsertPos) {
   ID.AddInteger(SCEVType);
   for (const SCEV *Op : Ops)
     ID.AddPointer(Op);
-  void *IP = nullptr;
-  return UniqueSCEVs.FindNodeOrInsertPos(ID, IP);
+  return UniqueSCEVs.FindNodeOrInsertPos(ID, InsertPos);
+}
+
+SCEV *ScalarEvolution::findExistingSCEVInCache(SCEVTypes SCEVType,
+                                               ArrayRef<SCEVUse> Ops,
+                                               FoldingSetNodeID &ID,
+                                               void *&InsertPos) {
+  ID.AddInteger(SCEVType);
+  for (const SCEV *Op : Ops)
+    ID.AddPointer(Op);
+  return UniqueSCEVs.FindNodeOrInsertPos(ID, InsertPos);
 }
 
 const SCEV *ScalarEvolution::getAbsExpr(const SCEV *Op, bool IsNSW) {
@@ -4709,11 +4721,10 @@ void ScalarEvolution::insertValueToMap(Value *V, const SCEV *S) {
   // A recursive query may have already computed the SCEV. It should be
   // equivalent, but may not necessarily be exactly the same, e.g. due to lazily
   // inferred nowrap flags.
-  auto It = ValueExprMap.find_as(V);
-  if (It == ValueExprMap.end()) {
-    ValueExprMap.insert({SCEVCallbackVH(V, this), S});
-    ExprValueMap[S].insert(V);
-  }
+  auto [It, Inserted] = ValueExprMap.try_emplace(SCEVCallbackVH(V, this), S);
+  if (!Inserted)
+    return;
+  ExprValueMap.try_emplace(S).first->second.insert(V);
 }
 
 /// Return an existing SCEV if it exists, otherwise analyze the expression and
@@ -8672,7 +8683,8 @@ ScalarEvolution::getPredicatedBackedgeTakenInfo(const Loop *L) {
   BackedgeTakenInfo Result =
       computeBackedgeTakenCount(L, /*AllowPredicates=*/true);
 
-  return PredicatedBackedgeTakenCounts.find(L)->second = std::move(Result);
+  return PredicatedBackedgeTakenCounts.insert_or_assign(L, std::move(Result))
+      .first->second;
 }
 
 ScalarEvolution::BackedgeTakenInfo &
@@ -8710,12 +8722,8 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
       ConstantEvolutionLoopExitValue.erase(&PN);
   }
 
-  // Re-lookup the insert position, since the call to
-  // computeBackedgeTakenCount above could result in a
-  // recusive call to getBackedgeTakenInfo (on a different
-  // loop), which would invalidate the iterator computed
-  // earlier.
-  return BackedgeTakenCounts.find(L)->second = std::move(Result);
+  return BackedgeTakenCounts.insert_or_assign(L, std::move(Result))
+      .first->second;
 }
 
 void ScalarEvolution::forgetAllLoops() {

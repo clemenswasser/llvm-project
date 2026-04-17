@@ -2495,6 +2495,10 @@ private:
   /// `UniqueSCEVs`.  Return if found, else nullptr.
   SCEV *findExistingSCEVInCache(SCEVTypes SCEVType, ArrayRef<const SCEV *> Ops);
   SCEV *findExistingSCEVInCache(SCEVTypes SCEVType, ArrayRef<SCEVUse> Ops);
+  SCEV *findExistingSCEVInCache(SCEVTypes SCEVType, ArrayRef<const SCEV *> Ops,
+                                FoldingSetNodeID &ID, void *&InsertPos);
+  SCEV *findExistingSCEVInCache(SCEVTypes SCEVType, ArrayRef<SCEVUse> Ops,
+                                FoldingSetNodeID &ID, void *&InsertPos);
 
   /// Get reachable blocks in this function, making limited use of SCEV
   /// reasoning about conditions.
