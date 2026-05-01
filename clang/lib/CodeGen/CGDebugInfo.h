@@ -168,6 +168,12 @@ class CGDebugInfo {
   /// using declarations and global alias variables) that aren't covered
   /// by other more specific caches.
   llvm::DenseMap<const Decl *, llvm::TrackingMDRef> DeclCache;
+  struct ClassNameCacheEntry {
+    StringRef Name;
+    bool NameIsSimplified;
+  };
+  llvm::DenseMap<const RecordDecl *, ClassNameCacheEntry> ClassNameCache;
+  llvm::DenseMap<const TagDecl *, StringRef> TypeIdentifierCache;
   llvm::DenseMap<const Decl *, llvm::TrackingMDRef> ImportedDeclCache;
   llvm::DenseMap<const NamespaceDecl *, llvm::TrackingMDRef> NamespaceCache;
   llvm::DenseMap<const NamespaceAliasDecl *, llvm::TrackingMDRef>
@@ -863,6 +869,8 @@ private:
   /// Get class name including template argument list.
   StringRef getClassName(const RecordDecl *RD,
                          bool *NameIsSimplified = nullptr);
+
+  StringRef getTypeIdentifier(const TagType *Ty);
 
   /// Get the vtable name for the given class.
   StringRef getVTableName(const CXXRecordDecl *Decl);
