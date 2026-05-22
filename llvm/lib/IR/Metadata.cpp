@@ -214,6 +214,12 @@ bool MetadataTracking::track(void *Ref, Metadata &MD, OwnerTy Owner) {
   assert(Ref && "Expected live reference");
   assert((Owner || *static_cast<Metadata **>(Ref) == &MD) &&
          "Reference without owner must be direct");
+  unsigned ID = MD.getMetadataID();
+  if (LLVM_LIKELY(ID >= Metadata::MDTupleKind)) {
+    auto *N = static_cast<MDNode *>(&MD);
+    if (LLVM_LIKELY(N->isResolved() && ID != Metadata::DIAssignIDKind))
+      return false;
+  }
   if (auto *R = ReplaceableMetadataImpl::getOrCreate(MD)) {
     R->addRef(Ref, Owner);
     return true;
