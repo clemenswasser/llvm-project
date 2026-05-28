@@ -686,14 +686,6 @@ void DbgMarker::eraseFromParent() {
   delete this;
 }
 
-iterator_range<DbgRecord::self_iterator> DbgMarker::getDbgRecordRange() {
-  return StoredDbgRecords;
-}
-iterator_range<DbgRecord::const_self_iterator>
-DbgMarker::getDbgRecordRange() const {
-  return StoredDbgRecords;
-}
-
 void DbgRecord::removeFromParent() {
   getMarker()->StoredDbgRecords.erase(getIterator());
   Marker = nullptr;

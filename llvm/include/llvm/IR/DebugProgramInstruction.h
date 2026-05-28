@@ -632,10 +632,13 @@ public:
                       bool IsForDebug) const;
 
   /// Produce a range over all the DbgRecords in this Marker.
-  LLVM_ABI iterator_range<simple_ilist<DbgRecord>::iterator>
-  getDbgRecordRange();
-  LLVM_ABI iterator_range<simple_ilist<DbgRecord>::const_iterator>
-  getDbgRecordRange() const;
+  iterator_range<simple_ilist<DbgRecord>::iterator> getDbgRecordRange() {
+    return StoredDbgRecords;
+  }
+  iterator_range<simple_ilist<DbgRecord>::const_iterator>
+  getDbgRecordRange() const {
+    return StoredDbgRecords;
+  }
   /// Transfer any DbgRecords from \p Src into this DbgMarker. If \p
   /// InsertAtHead is true, place them before existing DbgRecords, otherwise
   /// afterwards.
