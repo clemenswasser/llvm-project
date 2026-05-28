@@ -1217,13 +1217,22 @@ ConstantRange ConstantRange::multiply(const ConstantRange &Other,
     return getEmpty();
 
   if (const APInt *C = getSingleElement()) {
+    if (C->isZero())
+      return ConstantRange(APInt::getZero(getBitWidth()));
     if (C->isOne())
       return Other;
     if (C->isAllOnes())
       return ConstantRange(APInt::getZero(getBitWidth())).sub(Other);
+
+    if (NoWrapKind == OverflowingBinaryOperator::AnyWrap) {
+      if (const APInt *OtherC = Other.getSingleElement())
+        return ConstantRange(*C * *OtherC);
+    }
   }
 
   if (const APInt *C = Other.getSingleElement()) {
+    if (C->isZero())
+      return ConstantRange(APInt::getZero(getBitWidth()));
     if (C->isOne())
       return *this;
     if (C->isAllOnes())
