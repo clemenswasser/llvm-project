@@ -149,6 +149,20 @@ bool CanonicalizeFreezeInLoopsImpl::run() {
   if (!L->isLoopSimplifyForm())
     return false;
 
+  bool HasFreeze = false;
+  for (auto *BB : L->blocks()) {
+    for (auto &I : *BB) {
+      if (isa<FreezeInst>(&I)) {
+        HasFreeze = true;
+        break;
+      }
+    }
+    if (HasFreeze)
+      break;
+  }
+  if (!HasFreeze)
+    return false;
+
   SmallSetVector<FrozenIndPHIInfo, 4> Candidates;
 
   for (auto &PHI : L->getHeader()->phis()) {
