@@ -99,14 +99,24 @@ LazyCallGraph::EdgeSequence &LazyCallGraph::Node::populateSlow() {
   // safety of optimizing a direct call edge.
   for (BasicBlock &BB : *F)
     for (Instruction &I : BB) {
-      if (auto *CB = dyn_cast<CallBase>(&I))
-        if (Function *Callee = CB->getCalledFunction())
-          if (!Callee->isDeclaration())
+      unsigned Opcode = I.getOpcode();
+      if (Opcode == Instruction::Call || Opcode == Instruction::Invoke ||
+          Opcode == Instruction::CallBr) {
+        auto *CB = cast<CallBase>(&I);
+        if (Function *Callee = CB->getCalledFunction()) {
+          if (!Callee->isDeclaration()) {
             if (Callees.insert(Callee).second) {
               Visited.insert(Callee);
               addEdge(Edges->Edges, Edges->EdgeIndexMap, G->get(*Callee),
                       LazyCallGraph::Edge::Call);
             }
+          } else {
+            DeclCallees.push_back(Callee);
+          }
+        } else {
+          HasIndirectCalls = true;
+        }
+      }
 
       for (Value *Op : I.operand_values())
         if (Constant *C = dyn_cast<Constant>(Op))

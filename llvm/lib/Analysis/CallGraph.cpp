@@ -96,18 +96,21 @@ void CallGraph::populateCallGraphNode(CallGraphNode *Node) {
   // Look for calls by this function.
   for (BasicBlock &BB : *F)
     for (Instruction &I : BB) {
-      if (auto *Call = dyn_cast<CallBase>(&I)) {
-        const Function *Callee = Call->getCalledFunction();
-        if (!Callee)
-          Node->addCalledFunction(Call, CallsExternalNode.get());
-        else
-          Node->addCalledFunction(Call, getOrInsertFunction(Callee));
+      unsigned Opcode = I.getOpcode();
+      if (Opcode != Instruction::Call && Opcode != Instruction::Invoke &&
+          Opcode != Instruction::CallBr)
+        continue;
+      auto *Call = cast<CallBase>(&I);
+      const Function *Callee = Call->getCalledFunction();
+      if (!Callee)
+        Node->addCalledFunction(Call, CallsExternalNode.get());
+      else
+        Node->addCalledFunction(Call, getOrInsertFunction(Callee));
 
-        // Add reference to callback functions.
-        forEachCallbackFunction(*Call, [=](Function *CB) {
-          Node->addCalledFunction(nullptr, getOrInsertFunction(CB));
-        });
-      }
+      // Add reference to callback functions.
+      forEachCallbackFunction(*Call, [=](Function *CB) {
+        Node->addCalledFunction(nullptr, getOrInsertFunction(CB));
+      });
     }
 }
 

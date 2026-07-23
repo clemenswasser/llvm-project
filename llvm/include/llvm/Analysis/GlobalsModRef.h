@@ -23,6 +23,7 @@
 namespace llvm {
 class CallGraph;
 class Function;
+class LazyCallGraph;
 
 /// An alias analysis result set for globals.
 ///
@@ -91,6 +92,11 @@ public:
                 std::function<const TargetLibraryInfo &(Function &F)> GetTLI,
                 CallGraph &CG);
 
+  LLVM_ABI static GlobalsAAResult
+  analyzeModule(Module &M,
+                std::function<const TargetLibraryInfo &(Function &F)> GetTLI,
+                LazyCallGraph &CG);
+
   //------------------------------------------------
   // Implement the AliasAnalysis API
   //
@@ -114,12 +120,14 @@ private:
 
   void AnalyzeGlobals(Module &M);
   void AnalyzeCallGraph(CallGraph &CG, Module &M);
+  void AnalyzeCallGraph(LazyCallGraph &LCG, Module &M);
   bool AnalyzeUsesOfPointer(Value *V,
                             SmallPtrSetImpl<Function *> *Readers = nullptr,
                             SmallPtrSetImpl<Function *> *Writers = nullptr,
                             GlobalValue *OkayStoreDest = nullptr);
   bool AnalyzeIndirectGlobalMemory(GlobalVariable *GV);
   void CollectSCCMembership(CallGraph &CG);
+  void CollectSCCMembership(LazyCallGraph &LCG);
 
   bool isNonEscapingGlobalNoAlias(const GlobalValue *GV, const Value *V,
                                   const Instruction *CtxI);
