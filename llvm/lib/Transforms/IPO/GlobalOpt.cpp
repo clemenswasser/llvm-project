@@ -1924,6 +1924,27 @@ static void RemovePreallocated(Function *F) {
   }
 }
 
+static bool hasUnreachableBlocks(Function &F) {
+  unsigned NumBlocks = F.size();
+  if (NumBlocks <= 1)
+    return false;
+
+  SmallPtrSet<BasicBlock *, 32> Reachable;
+  SmallVector<BasicBlock *, 32> Worklist;
+  BasicBlock *Entry = &F.getEntryBlock();
+  Worklist.push_back(Entry);
+  Reachable.insert(Entry);
+
+  while (!Worklist.empty()) {
+    BasicBlock *BB = Worklist.pop_back_val();
+    for (BasicBlock *Succ : successors(BB)) {
+      if (Reachable.insert(Succ).second)
+        Worklist.push_back(Succ);
+    }
+  }
+  return Reachable.size() != NumBlocks;
+}
+
 static bool
 OptimizeFunctions(Module &M,
                   function_ref<TargetLibraryInfo &(Function &)> GetTLI,
@@ -1968,7 +1989,7 @@ OptimizeFunctions(Module &M,
     // some more complicated logic to break these cycles.
     // Notify the analysis manager that we've modified the function's CFG.
     if (!F.isDeclaration()) {
-      if (removeUnreachableBlocks(F)) {
+      if (hasUnreachableBlocks(F) && removeUnreachableBlocks(F)) {
         Changed = true;
         ChangedCFGCallback(F);
       }
