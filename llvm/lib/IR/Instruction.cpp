@@ -1392,7 +1392,7 @@ bool Instruction::isLaunderOrStripInvariantGroup() const {
          ID == Intrinsic::strip_invariant_group;
 }
 
-bool Instruction::isDebugOrPseudoInst() const {
+bool Instruction::isDebugOrPseudoInstSlow() const {
   return isa<DbgInfoIntrinsic>(this) || isa<PseudoProbeInst>(this);
 }
 

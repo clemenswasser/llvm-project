@@ -920,7 +920,11 @@ public:
   LLVM_ABI bool isLaunderOrStripInvariantGroup() const LLVM_READONLY;
 
   /// Return true if the instruction is a DbgInfoIntrinsic or PseudoProbeInst.
-  LLVM_ABI bool isDebugOrPseudoInst() const LLVM_READONLY;
+  bool isDebugOrPseudoInst() const LLVM_READONLY {
+    if (getOpcode() != Instruction::Call)
+      return false;
+    return isDebugOrPseudoInstSlow();
+  }
 
   /// Create a copy of 'this' instruction that is identical in all ways except
   /// the following:
@@ -1077,6 +1081,8 @@ private:
   unsigned short getSubclassDataFromValue() const {
     return Value::getSubclassDataFromValue();
   }
+
+  LLVM_ABI bool isDebugOrPseudoInstSlow() const LLVM_READONLY;
 
 protected:
   // Instruction subclasses can stick up to 16 bits of stuff into the
