@@ -144,9 +144,10 @@ AnalysisManager<IRUnitT, ExtraArgTs...>::getResultImpl(
       PI.runBeforeAnalysis(P, IR);
     }
 
+    auto Result = P.run(IR, *this, std::forward<ExtraArgTs>(ExtraArgs)...);
     AnalysisResultListT &ResultList = AnalysisResultLists[&IR];
-    ResultList.emplace_back(
-        ID, P.run(IR, *this, std::forward<ExtraArgTs>(ExtraArgs)...));
+    unsigned Idx = ResultList.size();
+    ResultList.emplace_back(ID, std::move(Result));
 
     PI.runAfterAnalysis(P, IR);
 
@@ -155,10 +156,10 @@ AnalysisManager<IRUnitT, ExtraArgTs...>::getResultImpl(
     RI = AnalysisResults.find({ID, &IR});
     assert(RI != AnalysisResults.end() && "we just inserted it!");
 
-    RI->second = std::prev(ResultList.end());
+    RI->second = Idx;
   }
 
-  return *RI->second->second;
+  return *AnalysisResultLists[&IR][RI->second].second;
 }
 
 template <typename IRUnitT, typename... ExtraArgTs>
@@ -171,7 +172,7 @@ inline void AnalysisManager<IRUnitT, ExtraArgTs...>::invalidate(
   // Track whether each analysis's result is invalidated in
   // IsResultInvalidated.
   SmallDenseMap<AnalysisKey *, bool, 8> IsResultInvalidated;
-  Invalidator Inv(IsResultInvalidated, AnalysisResults);
+  Invalidator Inv(IsResultInvalidated, AnalysisResults, AnalysisResultLists);
   AnalysisResultListT &ResultsList = AnalysisResultLists[&IR];
   for (auto &AnalysisResultPair : ResultsList) {
     // This is basically the same thing as Invalidator::invalidate, but we
@@ -200,19 +201,22 @@ inline void AnalysisManager<IRUnitT, ExtraArgTs...>::invalidate(
 
   // Now erase the results that were marked above as invalidated.
   if (!IsResultInvalidated.empty()) {
-    for (auto I = ResultsList.begin(), E = ResultsList.end(); I != E;) {
-      AnalysisKey *ID = I->first;
+    unsigned WriteIdx = 0;
+    for (unsigned ReadIdx = 0, E = ResultsList.size(); ReadIdx < E; ++ReadIdx) {
+      AnalysisKey *ID = ResultsList[ReadIdx].first;
       if (!IsResultInvalidated.lookup(ID)) {
-        ++I;
-        continue;
+        if (WriteIdx != ReadIdx) {
+          ResultsList[WriteIdx] = std::move(ResultsList[ReadIdx]);
+          AnalysisResults[{ID, &IR}] = WriteIdx;
+        }
+        ++WriteIdx;
+      } else {
+        if (auto *PI = getCachedResult<PassInstrumentationAnalysis>(IR))
+          PI->runAnalysisInvalidated(this->lookUpPass(ID), IR);
+        AnalysisResults.erase({ID, &IR});
       }
-
-      if (auto *PI = getCachedResult<PassInstrumentationAnalysis>(IR))
-        PI->runAnalysisInvalidated(this->lookUpPass(ID), IR);
-
-      I = ResultsList.erase(I);
-      AnalysisResults.erase({ID, &IR});
     }
+    ResultsList.resize(WriteIdx);
   }
 
   if (ResultsList.empty())

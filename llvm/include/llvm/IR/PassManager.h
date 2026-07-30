@@ -287,8 +287,8 @@ private:
   /// erases. Provides the analysis ID to enable finding iterators to a given
   /// entry in maps below, and provides the storage for the actual result
   /// concept.
-  using AnalysisResultListT =
-      std::list<std::pair<AnalysisKey *, typename ResultConceptT::unique_ptr>>;
+  using AnalysisResultListT = SmallVector<
+      std::pair<AnalysisKey *, typename ResultConceptT::unique_ptr>, 8>;
 
   /// Map type from IRUnitT pointer to our custom list type.
   using AnalysisResultListMapT = DenseMap<IRUnitT *, AnalysisResultListT>;
@@ -297,8 +297,7 @@ private:
   /// iterator into a particular result list (which is where the actual analysis
   /// result is stored).
   using AnalysisResultMapT =
-      DenseMap<std::pair<AnalysisKey *, IRUnitT *>,
-               typename AnalysisResultListT::iterator>;
+      DenseMap<std::pair<AnalysisKey *, IRUnitT *>, unsigned>;
 
 public:
   /// API to communicate dependencies between analyses during invalidation.
@@ -365,7 +364,11 @@ public:
              "manager's cache is always an error, likely due to a stale result "
              "handle!");
 
-      auto &Result = static_cast<ResultT &>(*RI->second->second);
+      auto LI = ResultLists.find(&IR);
+      assert(LI != ResultLists.end() &&
+             "Result list must exist if a result is cached!");
+
+      auto &Result = static_cast<ResultT &>(*LI->second[RI->second].second);
 
       // Insert into the map whether the result should be invalidated and return
       // that. Note that we cannot reuse IMapI and must do a fresh insert here,
@@ -381,11 +384,14 @@ public:
     }
 
     Invalidator(SmallDenseMap<AnalysisKey *, bool, 8> &IsResultInvalidated,
-                const AnalysisResultMapT &Results)
-        : IsResultInvalidated(IsResultInvalidated), Results(Results) {}
+                const AnalysisResultMapT &Results,
+                const AnalysisResultListMapT &ResultLists)
+        : IsResultInvalidated(IsResultInvalidated), Results(Results),
+          ResultLists(ResultLists) {}
 
     SmallDenseMap<AnalysisKey *, bool, 8> &IsResultInvalidated;
     const AnalysisResultMapT &Results;
+    const AnalysisResultListMapT &ResultLists;
   };
 
   /// Construct an empty analysis manager.
@@ -467,7 +473,7 @@ public:
   void verifyNotInvalidated(IRUnitT &IR, typename PassT::Result *Result) const {
     PreservedAnalyses PA = PreservedAnalyses::none();
     SmallDenseMap<AnalysisKey *, bool, 8> IsResultInvalidated;
-    Invalidator Inv(IsResultInvalidated, AnalysisResults);
+    Invalidator Inv(IsResultInvalidated, AnalysisResults, AnalysisResultLists);
     assert(!Result->invalidate(IR, PA, Inv) &&
            "Cached result cannot be invalidated");
   }
@@ -519,10 +525,19 @@ public:
     AnalysisResultListT &ResultsList = AnalysisResultLists[&IR];
     AnalysisKey *ID = AnalysisT::ID();
 
-    auto I =
-        llvm::find_if(ResultsList, [&ID](auto &E) { return E.first == ID; });
+    auto I = llvm::find_if(ResultsList,
+                           [ID](const auto &E) { return E.first == ID; });
     assert(I != ResultsList.end() && "Analysis must be available");
-    ResultsList.erase(I);
+
+    unsigned Idx = I - ResultsList.begin();
+    unsigned LastIdx = ResultsList.size() - 1;
+
+    if (Idx != LastIdx) {
+      AnalysisKey *LastID = ResultsList[LastIdx].first;
+      AnalysisResults[{LastID, &IR}] = Idx;
+      ResultsList[Idx] = std::move(ResultsList[LastIdx]);
+    }
+    ResultsList.pop_back();
     AnalysisResults.erase({ID, &IR});
   }
 
@@ -551,7 +566,13 @@ private:
   ResultConceptT *getCachedResultImpl(AnalysisKey *ID, IRUnitT &IR) const {
     typename AnalysisResultMapT::const_iterator RI =
         AnalysisResults.find({ID, &IR});
-    return RI == AnalysisResults.end() ? nullptr : &*RI->second->second;
+    if (RI == AnalysisResults.end())
+      return nullptr;
+
+    auto LI = AnalysisResultLists.find(&IR);
+    assert(LI != AnalysisResultLists.end() &&
+           "Result list must exist for a cached result!");
+    return &*LI->second[RI->second].second;
   }
 
   /// Map type from analysis pass ID to pass concept pointer.
