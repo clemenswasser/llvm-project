@@ -236,43 +236,60 @@ using ValueTable = SmallVector<ValueIDNum, 0>;
 /// accessor methods.
 struct FuncValueTable {
   FuncValueTable(int NumBBs, int NumLocs) {
-    Storage.reserve(NumBBs);
-    for (int i = 0; i != NumBBs; ++i)
-      Storage.push_back(
-          std::make_unique<ValueTable>(NumLocs, ValueIDNum::EmptyValue));
+    Storage.resize(NumBBs);
+    for (int I = 0; I != NumBBs; ++I)
+      Storage[I].assign(NumLocs, ValueIDNum::EmptyValue);
   }
 
   /// Returns the ValueTable associated with MBB.
-  ValueTable &operator[](const MachineBasicBlock &MBB) const {
+  ValueTable const &operator[](const MachineBasicBlock &MBB) const {
+    return (*this)[MBB.getNumber()];
+  }
+
+  /// Returns the ValueTable associated with MBB.
+  ValueTable &operator[](const MachineBasicBlock &MBB) {
     return (*this)[MBB.getNumber()];
   }
 
   /// Returns the ValueTable associated with the MachineBasicBlock whose number
   /// is MBBNum.
-  ValueTable &operator[](int MBBNum) const {
+  ValueTable &operator[](int MBBNum) {
     auto &TablePtr = Storage[MBBNum];
-    assert(TablePtr && "Trying to access a deleted table");
-    return *TablePtr;
+    assert(!TablePtr.empty() && "Trying to access a deleted table");
+    return TablePtr;
+  }
+
+  /// Returns the ValueTable associated with the MachineBasicBlock whose number
+  /// is MBBNum.
+  ValueTable const &operator[](int MBBNum) const {
+    auto &TablePtr = Storage[MBBNum];
+    assert(!TablePtr.empty() && "Trying to access a deleted table");
+    return TablePtr;
   }
 
   /// Returns the ValueTable associated with the entry MachineBasicBlock.
-  ValueTable &tableForEntryMBB() const { return (*this)[0]; }
+  ValueTable &tableForEntryMBB() { return (*this)[0]; }
+
+  /// Returns the ValueTable associated with the entry MachineBasicBlock.
+  ValueTable const &tableForEntryMBB() const { return (*this)[0]; }
 
   /// Returns true if the ValueTable associated with MBB has not been freed.
   bool hasTableFor(MachineBasicBlock &MBB) const {
-    return Storage[MBB.getNumber()] != nullptr;
+    return !Storage[MBB.getNumber()].empty();
   }
 
   /// Frees the memory of the ValueTable associated with MBB.
   void ejectTableForBlock(const MachineBasicBlock &MBB) {
-    Storage[MBB.getNumber()].reset();
+    auto &V = Storage[MBB.getNumber()];
+    V.~ValueTable();
+    new (&V) ValueTable();
   }
 
 private:
-  /// ValueTables are stored as unique_ptrs to allow for deallocation during
-  /// LDV; this was measured to have a significant impact on compiler memory
-  /// usage.
-  SmallVector<std::unique_ptr<ValueTable>, 0> Storage;
+  /// ValueTables are stored directly to avoid unique_ptr allocation overhead.
+  /// We swap with a heap-allocated empty table to free the buffer during LDV,
+  /// which has a significant impact on compiler memory usage.
+  SmallVector<ValueTable, 0> Storage;
 };
 
 /// Thin wrapper around an integer -- designed to give more type safety to
