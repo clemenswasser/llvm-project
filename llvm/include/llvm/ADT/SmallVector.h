@@ -366,6 +366,11 @@ protected:
     std::uninitialized_copy(I, E, Dest);
   }
 
+  /// Fill uninitialized memory with copies of Val.
+  static void uninitialized_fill_n(T *Dest, size_t N, const T &Val) {
+    std::uninitialized_fill_n(Dest, N, Val);
+  }
+
   /// Grow the allocated memory (without initializing new elements), doubling
   /// the size of the allocated memory. Guarantees space for at least one more
   /// element, or MinSize more elements if specified.
@@ -402,7 +407,7 @@ protected:
     // Grow manually in case Elt is an internal reference.
     size_t NewCapacity;
     T *NewElts = mallocForGrow(NumElts, NewCapacity);
-    std::uninitialized_fill_n(NewElts, NumElts, Elt);
+    uninitialized_fill_n(NewElts, NumElts, Elt);
     this->destroy_range(this->begin(), this->end());
     takeAllocationForGrow(NewElts, NewCapacity);
     this->set_size(NumElts);
@@ -528,6 +533,12 @@ protected:
     }
   }
 
+  /// Fill uninitialized memory with copies of Val.
+  /// For trivially copyable types, assignment is safe and allows vectorization.
+  static void uninitialized_fill_n(T *Dest, size_t N, ValueParamT Val) {
+    std::fill_n(Dest, N, Val);
+  }
+
   /// Double the size of the allocated memory, guaranteeing space for at
   /// least one more element or MinSize if specified.
   void grow(size_t MinSize = 0) { this->grow_pod(MinSize, sizeof(T)); }
@@ -553,7 +564,7 @@ protected:
     // reference invalidation problems without losing the realloc optimization.
     this->set_size(0);
     this->grow(NumElts);
-    std::uninitialized_fill_n(this->begin(), NumElts, Elt);
+    uninitialized_fill_n(this->begin(), NumElts, Elt);
     this->set_size(NumElts);
   }
 
@@ -716,7 +727,7 @@ public:
   /// Append \p NumInputs copies of \p Elt to the end.
   void append(size_type NumInputs, ValueParamT Elt) {
     const T *EltPtr = this->reserveForParamAndGetAddress(Elt, NumInputs);
-    std::uninitialized_fill_n(this->end(), NumInputs, *EltPtr);
+    SuperClass::uninitialized_fill_n(this->end(), NumInputs, *EltPtr);
     this->set_size(this->size() + NumInputs);
   }
 
@@ -736,7 +747,8 @@ public:
     // Assign over existing elements.
     std::fill_n(this->begin(), std::min(NumElts, this->size()), Elt);
     if (NumElts > this->size())
-      std::uninitialized_fill_n(this->end(), NumElts - this->size(), Elt);
+      SuperClass::uninitialized_fill_n(this->end(), NumElts - this->size(),
+                                       Elt);
     else if (NumElts < this->size())
       this->destroy_range(this->begin() + NumElts, this->end());
     this->set_size(NumElts);
@@ -898,7 +910,8 @@ public:
     std::fill_n(I, NumOverwritten, *EltPtr);
 
     // Insert the non-overwritten middle part.
-    std::uninitialized_fill_n(OldEnd, NumToInsert - NumOverwritten, *EltPtr);
+    SuperClass::uninitialized_fill_n(OldEnd, NumToInsert - NumOverwritten,
+                                     *EltPtr);
     return I;
   }
 
