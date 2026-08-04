@@ -9144,6 +9144,9 @@ bool CodeGenPrepare::optimizeBlock(BasicBlock &BB, ModifyDT &ModifiedDT) {
 }
 
 bool CodeGenPrepare::fixupDbgVariableRecordsOnInst(Instruction &I) {
+  if (SunkAddrs.empty())
+    return false;
+
   bool AnyChange = false;
   for (DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
     AnyChange |= fixupDbgVariableRecord(DVR);
