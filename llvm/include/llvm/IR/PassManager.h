@@ -39,6 +39,7 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/TinyPtrVector.h"
@@ -48,7 +49,6 @@
 #include "llvm/Support/TypeName.h"
 #include <cassert>
 #include <cstring>
-#include <list>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -280,24 +280,26 @@ private:
   using PassConceptT =
       detail::AnalysisPassConcept<IRUnitT, Invalidator, ExtraArgTs...>;
 
-  /// List of analysis pass IDs and associated concept pointers.
+  /// Storage for the analysis results associated with one IR unit.
   ///
-  /// Requires iterators to be valid across appending new entries and arbitrary
-  /// erases. Provides the analysis ID to enable finding iterators to a given
-  /// entry in maps below, and provides the storage for the actual result
-  /// concept.
+  /// Analysis results are separately heap allocated because they are
+  /// type-erased. The vector therefore only moves unique_ptrs when it grows or
+  /// compacts; the result objects themselves remain at stable addresses.
+  /// Eight results cover the common case without allocating a node for every
+  /// cached analysis.
   using AnalysisResultListT =
-      std::list<std::pair<AnalysisKey *, typename ResultConceptT::unique_ptr>>;
+      SmallVector<std::pair<AnalysisKey *, typename ResultConceptT::unique_ptr>,
+                  8>;
 
-  /// Map type from IRUnitT pointer to our custom list type.
+  /// Map type from IRUnitT pointer to its cached analysis results.
   using AnalysisResultListMapT = DenseMap<IRUnitT *, AnalysisResultListT>;
 
-  /// Map type from a pair of analysis ID and IRUnitT pointer to an
-  /// iterator into a particular result list (which is where the actual analysis
-  /// result is stored).
+  /// Map type from a pair of analysis ID and IRUnitT pointer to the actual
+  /// result object. The result object is owned by AnalysisResultListMapT, but
+  /// its heap allocation makes this pointer stable when the vector moves its
+  /// unique_ptr entries.
   using AnalysisResultMapT =
-      DenseMap<std::pair<AnalysisKey *, IRUnitT *>,
-               typename AnalysisResultListT::iterator>;
+      DenseMap<std::pair<AnalysisKey *, IRUnitT *>, ResultConceptT *>;
 
 public:
   /// API to communicate dependencies between analyses during invalidation.
@@ -364,7 +366,7 @@ public:
              "manager's cache is always an error, likely due to a stale result "
              "handle!");
 
-      auto &Result = static_cast<ResultT &>(*RI->second->second);
+      auto &Result = static_cast<ResultT &>(*RI->second);
 
       // Insert into the map whether the result should be invalidated and return
       // that. Note that we cannot reuse IMapI and must do a fresh insert here,
@@ -550,7 +552,7 @@ private:
   ResultConceptT *getCachedResultImpl(AnalysisKey *ID, IRUnitT &IR) const {
     typename AnalysisResultMapT::const_iterator RI =
         AnalysisResults.find({ID, &IR});
-    return RI == AnalysisResults.end() ? nullptr : &*RI->second->second;
+    return RI == AnalysisResults.end() ? nullptr : RI->second;
   }
 
   /// Map type from analysis pass ID to pass concept pointer.

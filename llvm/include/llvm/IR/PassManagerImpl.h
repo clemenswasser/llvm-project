@@ -119,7 +119,7 @@ AnalysisManager<IRUnitT, ExtraArgTs...>::clear(IRUnitT &IR,
   auto ResultsListI = AnalysisResultLists.find(&IR);
   if (ResultsListI == AnalysisResultLists.end())
     return;
-  // Delete the map entries that point into the results list.
+  // Delete the map entries that point to the results owned by the list.
   for (auto &IDAndResult : ResultsListI->second)
     AnalysisResults.erase({IDAndResult.first, &IR});
 
@@ -131,7 +131,8 @@ template <typename IRUnitT, typename... ExtraArgTs>
 inline typename AnalysisManager<IRUnitT, ExtraArgTs...>::ResultConceptT &
 AnalysisManager<IRUnitT, ExtraArgTs...>::getResultImpl(
     AnalysisKey *ID, IRUnitT &IR, ExtraArgTs... ExtraArgs) {
-  auto [RI, Inserted] = AnalysisResults.try_emplace(std::make_pair(ID, &IR));
+  auto [RI, Inserted] =
+      AnalysisResults.try_emplace(std::make_pair(ID, &IR), nullptr);
 
   // If we don't have a cached result for this function, look up the pass and
   // run it to produce a result, which we then add to the cache.
@@ -144,9 +145,13 @@ AnalysisManager<IRUnitT, ExtraArgTs...>::getResultImpl(
       PI.runBeforeAnalysis(P, IR);
     }
 
+    // Run the analysis before taking a reference into AnalysisResultLists:
+    // running an analysis can recursively cache another result and rehash the
+    // map.
+    auto Result = P.run(IR, *this, std::forward<ExtraArgTs>(ExtraArgs)...);
+    ResultConceptT *ResultPtr = Result.get();
     AnalysisResultListT &ResultList = AnalysisResultLists[&IR];
-    ResultList.emplace_back(
-        ID, P.run(IR, *this, std::forward<ExtraArgTs>(ExtraArgs)...));
+    ResultList.emplace_back(ID, std::move(Result));
 
     PI.runAfterAnalysis(P, IR);
 
@@ -155,10 +160,10 @@ AnalysisManager<IRUnitT, ExtraArgTs...>::getResultImpl(
     RI = AnalysisResults.find({ID, &IR});
     assert(RI != AnalysisResults.end() && "we just inserted it!");
 
-    RI->second = std::prev(ResultList.end());
+    RI->second = ResultPtr;
   }
 
-  return *RI->second->second;
+  return *RI->second;
 }
 
 template <typename IRUnitT, typename... ExtraArgTs>
@@ -172,7 +177,10 @@ inline void AnalysisManager<IRUnitT, ExtraArgTs...>::invalidate(
   // IsResultInvalidated.
   SmallDenseMap<AnalysisKey *, bool, 8> IsResultInvalidated;
   Invalidator Inv(IsResultInvalidated, AnalysisResults);
-  AnalysisResultListT &ResultsList = AnalysisResultLists[&IR];
+  auto ResultsListI = AnalysisResultLists.find(&IR);
+  if (ResultsListI == AnalysisResultLists.end())
+    return;
+  AnalysisResultListT &ResultsList = ResultsListI->second;
   for (auto &AnalysisResultPair : ResultsList) {
     // This is basically the same thing as Invalidator::invalidate, but we
     // can't call it here because we're operating on the type-erased result.
@@ -198,21 +206,26 @@ inline void AnalysisManager<IRUnitT, ExtraArgTs...>::invalidate(
                        "indicates a cycle!");
   }
 
-  // Now erase the results that were marked above as invalidated.
+  // Now erase the results that were marked above as invalidated. Moving the
+  // unique_ptr entries is cheap and does not change the addresses of the
+  // separately allocated result objects referenced by AnalysisResults.
   if (!IsResultInvalidated.empty()) {
-    for (auto I = ResultsList.begin(), E = ResultsList.end(); I != E;) {
-      AnalysisKey *ID = I->first;
+    unsigned WriteIdx = 0;
+    for (unsigned ReadIdx = 0, E = ResultsList.size(); ReadIdx < E; ++ReadIdx) {
+      AnalysisKey *ID = ResultsList[ReadIdx].first;
       if (!IsResultInvalidated.lookup(ID)) {
-        ++I;
+        if (WriteIdx != ReadIdx)
+          ResultsList[WriteIdx] = std::move(ResultsList[ReadIdx]);
+        ++WriteIdx;
         continue;
       }
 
       if (auto *PI = getCachedResult<PassInstrumentationAnalysis>(IR))
         PI->runAnalysisInvalidated(this->lookUpPass(ID), IR);
 
-      I = ResultsList.erase(I);
       AnalysisResults.erase({ID, &IR});
     }
+    ResultsList.resize(WriteIdx);
   }
 
   if (ResultsList.empty())
