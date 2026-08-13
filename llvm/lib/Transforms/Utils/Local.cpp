@@ -1813,20 +1813,16 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableRecord *DVR, PHINode *APN,
 bool llvm::LowerDbgDeclare(Function &F) {
   bool Changed = false;
   DIBuilder DIB(*F.getParent(), /*AllowUnresolved*/ false);
-  SmallVector<DbgDeclareInst *, 4> Dbgs;
   SmallVector<DbgVariableRecord *> DVRs;
   for (auto &FI : F) {
     for (Instruction &BI : FI) {
-      if (auto *DDI = dyn_cast<DbgDeclareInst>(&BI))
-        Dbgs.push_back(DDI);
-      for (DbgVariableRecord &DVR : filterDbgVars(BI.getDbgRecordRange())) {
-        if (DVR.getType() == DbgVariableRecord::LocationType::Declare)
-          DVRs.push_back(&DVR);
-      }
+      if (auto *AI = dyn_cast<AllocaInst>(&BI))
+        for (DbgVariableRecord *DVR : findDVRDeclares(AI))
+          DVRs.push_back(DVR);
     }
   }
 
-  if (Dbgs.empty() && DVRs.empty())
+  if (DVRs.empty())
     return Changed;
 
   auto LowerOne = [&](DbgVariableRecord *DDI) {
