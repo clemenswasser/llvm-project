@@ -318,12 +318,7 @@ public:
     bool isBest() const { return getQuality() == LocationQuality::Best; }
   };
 
-  using ValueLocPair = std::pair<ValueIDNum, LocationAndQuality>;
-
-  static inline bool ValueToLocSort(const ValueLocPair &A,
-                                    const ValueLocPair &B) {
-    return A.first < B.first;
-  };
+  using ValueLocMap = SmallDenseMap<ValueIDNum, LocationAndQuality, 16>;
 
   // Returns the LocationQuality for the location L iff the quality of L is
   // is strictly greater than the provided minimum quality.
@@ -353,8 +348,8 @@ public:
   /// \p DbgOpStore is the map containing the DbgOpID->DbgOp mapping needed to
   ///    determine the values used by Value.
   void loadVarInloc(MachineBasicBlock &MBB, DbgOpIDMap &DbgOpStore,
-                    const SmallVectorImpl<ValueLocPair> &ValueToLoc,
-                    DebugVariableID VarID, DbgValue Value) {
+                    const ValueLocMap &ValueToLoc, DebugVariableID VarID,
+                    DbgValue Value) {
     SmallVector<DbgOp> DbgOps;
     SmallVector<ResolvedDbgOp> ResolvedDbgOps;
     bool IsValueValid = true;
@@ -384,15 +379,12 @@ public:
       }
 
       // Search for the desired ValueIDNum, to examine the best location found
-      // for it. Use an empty ValueLocPair to search for an entry in ValueToLoc.
+      // for it.
       const ValueIDNum &Num = Op.ID;
-      ValueLocPair Probe(Num, LocationAndQuality());
-      auto ValuesPreferredLoc =
-          llvm::lower_bound(ValueToLoc, Probe, ValueToLocSort);
+      auto ValuesPreferredLoc = ValueToLoc.find(Num);
 
       // There must be a legitimate entry found for Num.
-      assert(ValuesPreferredLoc != ValueToLoc.end() &&
-             ValuesPreferredLoc->first == Num);
+      assert(ValuesPreferredLoc != ValueToLoc.end());
 
       if (ValuesPreferredLoc->second.isIllegal()) {
         // If it's a def that occurs in this block, register it as a
@@ -464,20 +456,15 @@ public:
     UseBeforeDefs.clear();
     UseBeforeDefVariables.clear();
 
-    // Mapping of the preferred locations for each value. Collected into this
-    // vector then sorted for easy searching.
-    SmallVector<ValueLocPair, 16> ValueToLoc;
-
-    // Initialized the preferred-location map with illegal locations, to be
-    // filled in later.
+    // Mapping of the preferred locations for each value. Initialized with
+    // illegal locations, to be filled in later.
+    ValueLocMap ValueToLoc;
     for (const auto &VLoc : VLocs)
       if (VLoc.second.Kind == DbgValue::Def)
         for (DbgOpID OpID : VLoc.second.getDbgOpIDs())
           if (!OpID.ID.IsConst)
-            ValueToLoc.push_back(
-                {DbgOpStore.find(OpID).ID, LocationAndQuality()});
+            ValueToLoc.try_emplace(DbgOpStore.find(OpID).ID);
 
-    llvm::sort(ValueToLoc, ValueToLocSort);
     ActiveMLocs.reserve(VLocs.size());
     ActiveVLocs.reserve(VLocs.size());
 
@@ -492,9 +479,8 @@ public:
       VarLocs.push_back(VNum);
 
       // Is there a variable that wants a location for this value? If not, skip.
-      ValueLocPair Probe(VNum, LocationAndQuality());
-      auto VIt = llvm::lower_bound(ValueToLoc, Probe, ValueToLocSort);
-      if (VIt == ValueToLoc.end() || VIt->first != VNum)
+      auto VIt = ValueToLoc.find(VNum);
+      if (VIt == ValueToLoc.end())
         continue;
 
       auto &Previous = VIt->second;
