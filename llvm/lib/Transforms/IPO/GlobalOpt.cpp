@@ -1326,14 +1326,17 @@ static bool
 deleteIfDead(GlobalValue &GV,
              SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats,
              function_ref<void(Function &)> DeleteFnCallback = nullptr) {
-  GV.removeDeadConstantUsers();
-
   if (!GV.isDiscardableIfUnused() && !GV.isDeclaration())
     return false;
 
   if (const Comdat *C = GV.getComdat())
     if (!GV.hasLocalLinkage() && NotDiscardableComdats.count(C))
       return false;
+
+  if (!GV.hasZeroLiveUses())
+    return false;
+
+  GV.removeDeadConstantUsers();
 
   bool Dead;
   if (auto *F = dyn_cast<Function>(&GV))
