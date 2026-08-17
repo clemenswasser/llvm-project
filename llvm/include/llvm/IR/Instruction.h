@@ -135,6 +135,15 @@ public:
       std::optional<simple_ilist<DbgRecord>::iterator> FromHere = std::nullopt,
       bool InsertAtHead = false);
 
+  /// Clone debug-info without registering debug-value metadata references in
+  /// the cloned records. The caller must track the records before exposing them
+  /// to code that can mutate or destroy metadata they refer to.
+  LLVM_ABI iterator_range<simple_ilist<DbgRecord>::iterator>
+  cloneDebugInfoFromUntracked(
+      const Instruction *From,
+      std::optional<simple_ilist<DbgRecord>::iterator> FromHere = std::nullopt,
+      bool InsertAtHead = false);
+
   /// Return a range over the DbgRecords attached to this instruction.
   iterator_range<simple_ilist<DbgRecord>::iterator> getDbgRecordRange() const {
     return llvm::getDbgRecordRange(DebugMarker);

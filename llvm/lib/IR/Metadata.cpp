@@ -185,9 +185,11 @@ void DebugValueUser::trackDebugValue(size_t Idx) {
 }
 
 void DebugValueUser::trackDebugValues() {
+  assert(!DebugValuesTracked && "Debug values are already tracked");
   for (Metadata *&MD : DebugValues)
     if (MD)
       MetadataTracking::track(&MD, *MD, *this);
+  DebugValuesTracked = true;
 }
 
 void DebugValueUser::untrackDebugValue(size_t Idx) {
@@ -198,17 +200,24 @@ void DebugValueUser::untrackDebugValue(size_t Idx) {
 }
 
 void DebugValueUser::untrackDebugValues() {
+  if (!DebugValuesTracked)
+    return;
   for (Metadata *&MD : DebugValues)
     if (MD)
       MetadataTracking::untrack(MD);
+  DebugValuesTracked = false;
 }
 
 void DebugValueUser::retrackDebugValues(DebugValueUser &X) {
   assert(DebugValueUser::operator==(X) && "Expected values to match");
-  for (const auto &[MD, XMD] : zip(DebugValues, X.DebugValues))
-    if (XMD)
-      MetadataTracking::retrack(XMD, MD);
+  if (X.DebugValuesTracked) {
+    for (const auto &[MD, XMD] : zip(DebugValues, X.DebugValues))
+      if (XMD)
+        MetadataTracking::retrack(XMD, MD);
+    DebugValuesTracked = true;
+  }
   X.DebugValues.fill(nullptr);
+  X.DebugValuesTracked = false;
 }
 
 bool MetadataTracking::track(void *Ref, Metadata &MD, OwnerTy Owner) {

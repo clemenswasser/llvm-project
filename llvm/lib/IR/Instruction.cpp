@@ -264,6 +264,20 @@ iterator_range<DbgRecord::self_iterator> Instruction::cloneDebugInfoFrom(
                                          InsertAtHead);
 }
 
+iterator_range<DbgRecord::self_iterator>
+Instruction::cloneDebugInfoFromUntracked(
+    const Instruction *From, std::optional<DbgRecord::self_iterator> FromHere,
+    bool InsertAtHead) {
+  if (!From->DebugMarker)
+    return DbgMarker::getEmptyDbgRecordRange();
+
+  if (!DebugMarker)
+    getParent()->createMarker(this);
+
+  return DebugMarker->cloneDebugInfoFromUntracked(From->DebugMarker, FromHere,
+                                                  InsertAtHead);
+}
+
 std::optional<DbgRecord::self_iterator>
 Instruction::getDbgReinsertionPosition() {
   // Is there a marker on the next instruction?

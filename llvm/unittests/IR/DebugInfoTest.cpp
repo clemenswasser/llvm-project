@@ -22,6 +22,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 
 #include "gtest/gtest.h"
 
@@ -1122,6 +1123,70 @@ TEST(MetadataTest, ConvertDbgToDbgVariableRecord) {
   // The record of those trailing DbgVariableRecords would dangle and cause an
   // assertion failure if it lived until the end of the LLVMContext.
   ExitBlock->deleteTrailingDbgRecords();
+}
+
+TEST(MetadataTest, CloneDbgVariableRecordWithoutTracking) {
+  LLVMContext C;
+  Module M("test", C);
+  auto *IntTy = Type::getInt32Ty(C);
+  auto *FT = FunctionType::get(Type::getVoidTy(C), {IntTy}, false);
+  Function *F = Function::Create(FT, GlobalValue::InternalLinkage, "f", &M);
+  Argument *Arg = F->getArg(0);
+
+  BasicBlock *BB = BasicBlock::Create(C, "entry", F);
+  IRBuilder<> Builder(BB);
+  Instruction *Source =
+      cast<Instruction>(Builder.CreateAdd(Arg, ConstantInt::get(IntTy, 1)));
+  Instruction *Dest =
+      cast<Instruction>(Builder.CreateSub(Arg, ConstantInt::get(IntTy, 1)));
+  Builder.CreateRetVoid();
+
+  DIBuilder DIB(M);
+  DIFile *File = DIB.createFile("test.c", "");
+  DICompileUnit *CU =
+      DIB.createCompileUnit(dwarf::DW_LANG_C, File, "test", false, "", 0);
+  DISubroutineType *SubroutineType =
+      DIB.createSubroutineType(DIB.getOrCreateTypeArray({}));
+  DISubprogram *SP =
+      DIB.createFunction(CU, "f", "f", File, 1, SubroutineType, 1,
+                         DINode::FlagZero, DISubprogram::SPFlagDefinition);
+  F->setSubprogram(SP);
+  DIType *DIBasicType = DIB.createBasicType("int", 32, dwarf::DW_ATE_signed);
+  DILocalVariable *Var =
+      DIB.createAutoVariable(SP, "x", File, 1, DIBasicType, true);
+  DIExpression *Expr = DIB.createExpression();
+  DebugLoc DL = DILocation::get(C, 1, 1, SP);
+  DIB.finalize();
+
+  BB->createMarker(Source);
+  auto *DVR = new DbgVariableRecord(ValueAsMetadata::get(Arg), Var, Expr, DL);
+  Source->DebugMarker->insertDbgRecord(DVR, false);
+
+  // An untracked record can be discarded without trying to unregister a
+  // reference that was never registered.
+  auto Untracked = Dest->cloneDebugInfoFromUntracked(Source);
+  ASSERT_NE(Untracked.begin(), Untracked.end());
+  Dest->DebugMarker->dropDbgRecords();
+
+  Untracked = Dest->cloneDebugInfoFromUntracked(Source);
+  ASSERT_NE(Untracked.begin(), Untracked.end());
+  auto *Clone = cast<DbgVariableRecord>(&*Untracked.begin());
+  Argument *RemappedArg = new Argument(IntTy, "remapped");
+  ValueToValueMapTy VMap;
+  VMap[Arg] = RemappedArg;
+  RemapDbgRecordRange(&M, Untracked, VMap);
+  for (DbgRecord &DR : Untracked)
+    DR.trackDebugInfo();
+
+  EXPECT_EQ(Clone->getVariableLocationOp(0), RemappedArg);
+  Argument *ReplacementArg = new Argument(IntTy, "replacement");
+  RemappedArg->replaceAllUsesWith(ReplacementArg);
+  EXPECT_EQ(Clone->getVariableLocationOp(0), ReplacementArg);
+
+  Dest->DebugMarker->dropDbgRecords();
+  Source->DebugMarker->dropDbgRecords();
+  delete ReplacementArg;
+  delete RemappedArg;
 }
 
 TEST(MetadataTest, DbgVariableRecordConversionRoutines) {

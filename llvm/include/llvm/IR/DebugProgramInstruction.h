@@ -133,6 +133,8 @@ extern template class LLVM_TEMPLATE_ABI DbgRecordParamRef<DILocalVariable>;
 /// value (RecordKind) and cases to a few functions in the base class:
 ///   deleteRecord
 ///   clone
+///   cloneWithoutTracking
+///   trackDebugInfo
 ///   isIdenticalToWhenDefined
 ///   both print methods
 ///   createDebugIntrinsic
@@ -156,6 +158,12 @@ public:
   ///@{
   LLVM_ABI void deleteRecord();
   LLVM_ABI DbgRecord *clone() const;
+  /// Clone this record without registering its debug-value metadata references.
+  /// The clone must be tracked with trackDebugInfo() before it is exposed to
+  /// code that can mutate or destroy metadata it refers to.
+  LLVM_ABI DbgRecord *cloneWithoutTracking() const;
+  /// Register any debug-value metadata references owned by this record.
+  LLVM_ABI void trackDebugInfo();
   LLVM_ABI void print(raw_ostream &O, bool IsForDebug = false) const;
   LLVM_ABI void print(raw_ostream &O, ModuleSlotTracker &MST,
                       bool IsForDebug) const;
@@ -277,6 +285,7 @@ public:
 /// to update our references to metadata beneath our feet.
 class DbgVariableRecord : public DbgRecord, protected DebugValueUser {
   friend class DebugValueUser;
+  friend class DbgRecord;
 
 public:
   enum class LocationType : uint8_t {
@@ -318,6 +327,8 @@ public:
                              const DILocation *DI);
 
 private:
+  DbgVariableRecord(const DbgVariableRecord &DVR, bool TrackDebugValues);
+
   /// Private constructor for creating new instances during parsing only. Only
   /// called through `createUnresolvedDbgVariableRecord` below, which makes
   /// clear that this is used for parsing only, and will later return a subclass
@@ -660,6 +671,14 @@ public:
   cloneDebugInfoFrom(DbgMarker *From,
                      std::optional<simple_ilist<DbgRecord>::iterator> FromHere,
                      bool InsertAtHead = false);
+  /// Clone debug records without registering their debug-value metadata
+  /// references. The caller must track cloned records before exposing them to
+  /// code that can mutate or destroy the metadata they refer to.
+  LLVM_ABI iterator_range<simple_ilist<DbgRecord>::iterator>
+  cloneDebugInfoFromUntracked(
+      DbgMarker *From,
+      std::optional<simple_ilist<DbgRecord>::iterator> FromHere,
+      bool InsertAtHead = false);
   /// Erase all DbgRecords in this DbgMarker.
   LLVM_ABI void dropDbgRecords();
   /// Erase a single DbgRecord from this marker. In an ideal future, we would

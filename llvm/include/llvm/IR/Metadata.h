@@ -225,6 +225,7 @@ protected:
   // restructure the DbgVariableRecord class then we can template parameterize
   // this array size.
   std::array<Metadata *, 3> DebugValues;
+  bool DebugValuesTracked = false;
 
   ArrayRef<Metadata *> getDebugValues() const { return DebugValues; }
 
@@ -240,9 +241,16 @@ public:
   LLVM_ABI void handleChangedValue(void *Old, Metadata *NewDebugValue);
   DebugValueUser() = default;
   explicit DebugValueUser(std::array<Metadata *, 3> DebugValues)
+      : DebugValueUser(DebugValues, true) {}
+
+protected:
+  DebugValueUser(std::array<Metadata *, 3> DebugValues, bool Track)
       : DebugValues(DebugValues) {
-    trackDebugValues();
+    if (Track)
+      trackDebugValues();
   }
+
+public:
   DebugValueUser(DebugValueUser &&X) {
     DebugValues = X.DebugValues;
     retrackDebugValues(X);
@@ -281,9 +289,12 @@ public:
 
   void resetDebugValue(size_t Idx, Metadata *DebugValue) {
     assert(Idx < 3 && "Invalid debug value index.");
-    untrackDebugValue(Idx);
+    const bool WasTracked = DebugValuesTracked;
+    if (WasTracked)
+      untrackDebugValue(Idx);
     DebugValues[Idx] = DebugValue;
-    trackDebugValue(Idx);
+    if (WasTracked)
+      trackDebugValue(Idx);
   }
 
   bool operator==(const DebugValueUser &X) const {
@@ -293,13 +304,13 @@ public:
     return DebugValues != X.DebugValues;
   }
 
-private:
-  LLVM_ABI void trackDebugValue(size_t Idx);
+protected:
   LLVM_ABI void trackDebugValues();
 
+private:
+  LLVM_ABI void trackDebugValue(size_t Idx);
   LLVM_ABI void untrackDebugValue(size_t Idx);
   LLVM_ABI void untrackDebugValues();
-
   LLVM_ABI void retrackDebugValues(DebugValueUser &X);
 };
 

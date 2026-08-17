@@ -558,8 +558,9 @@ void PruningFunctionCloner::CloneBlock(
         // source-instructions we've cloned and then subsequently optimised
         // away, so that their debug-info doesn't go missing.
         for (; DbgCursor != II; ++DbgCursor)
-          NewInst->cloneDebugInfoFrom(&*DbgCursor, std::nullopt, false);
-        NewInst->cloneDebugInfoFrom(&*II);
+          NewInst->cloneDebugInfoFromUntracked(&*DbgCursor, std::nullopt,
+                                               false);
+        NewInst->cloneDebugInfoFromUntracked(&*II);
         DbgCursor = std::next(II);
       };
 
@@ -902,7 +903,10 @@ void llvm::CloneAndPruneIntoFromInst(Function *NewFunc, const Function *OldFunc,
   Function::iterator Begin = cast<BasicBlock>(VMap[StartingBB])->getIterator();
   for (BasicBlock &BB : make_range(Begin, NewFunc->end())) {
     for (Instruction &I : BB) {
-      Mapper.remapDbgRecordRange(I.getModule(), I.getDbgRecordRange());
+      auto DbgRecords = I.getDbgRecordRange();
+      Mapper.remapDbgRecordRange(I.getModule(), DbgRecords);
+      for (DbgRecord &DR : DbgRecords)
+        DR.trackDebugInfo();
     }
   }
 

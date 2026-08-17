@@ -59,9 +59,13 @@ DbgVariableRecord::DbgVariableRecord(const DbgVariableIntrinsic *DVI)
 }
 
 DbgVariableRecord::DbgVariableRecord(const DbgVariableRecord &DVR)
-    : DbgRecord(ValueKind, DVR.getDebugLoc()), DebugValueUser(DVR.DebugValues),
-      Type(DVR.getType()), Variable(DVR.getVariable()),
-      Expression(DVR.getExpression()),
+    : DbgVariableRecord(DVR, true) {}
+
+DbgVariableRecord::DbgVariableRecord(const DbgVariableRecord &DVR,
+                                     bool TrackDebugValues)
+    : DbgRecord(ValueKind, DVR.getDebugLoc()),
+      DebugValueUser(DVR.DebugValues, TrackDebugValues), Type(DVR.getType()),
+      Variable(DVR.getVariable()), Expression(DVR.getExpression()),
       AddressExpression(DVR.AddressExpression) {}
 
 DbgVariableRecord::DbgVariableRecord(Metadata *Location, DILocalVariable *DV,
@@ -409,6 +413,27 @@ DbgRecord *DbgRecord::clone() const {
   llvm_unreachable("unsupported DbgRecord kind");
 }
 
+DbgRecord *DbgRecord::cloneWithoutTracking() const {
+  switch (RecordKind) {
+  case ValueKind:
+    return new DbgVariableRecord(*cast<DbgVariableRecord>(this), false);
+  case LabelKind:
+    return cast<DbgLabelRecord>(this)->clone();
+  };
+  llvm_unreachable("unsupported DbgRecord kind");
+}
+
+void DbgRecord::trackDebugInfo() {
+  switch (RecordKind) {
+  case ValueKind:
+    cast<DbgVariableRecord>(this)->trackDebugValues();
+    return;
+  case LabelKind:
+    return;
+  }
+  llvm_unreachable("unsupported DbgRecord kind");
+}
+
 DbgVariableRecord *DbgVariableRecord::clone() const {
   return new DbgVariableRecord(*this);
 }
@@ -744,8 +769,10 @@ void DbgMarker::absorbDebugValues(
                           Range.end());
 }
 
-iterator_range<simple_ilist<DbgRecord>::iterator> DbgMarker::cloneDebugInfoFrom(
-    DbgMarker *From, std::optional<simple_ilist<DbgRecord>::iterator> from_here,
+template <bool TrackDebugValues>
+static iterator_range<simple_ilist<DbgRecord>::iterator> cloneDebugInfoFromImpl(
+    DbgMarker *Dest, DbgMarker *From,
+    std::optional<simple_ilist<DbgRecord>::iterator> FromHere,
     bool InsertAtHead) {
   DbgRecord *First = nullptr;
   // Work out what range of DbgRecords to clone: normally all the contents of
@@ -753,28 +780,46 @@ iterator_range<simple_ilist<DbgRecord>::iterator> DbgMarker::cloneDebugInfoFrom(
   // to end().
   auto Range =
       make_range(From->StoredDbgRecords.begin(), From->StoredDbgRecords.end());
-  if (from_here.has_value())
-    Range = make_range(*from_here, From->StoredDbgRecords.end());
+  if (FromHere.has_value())
+    Range = make_range(*FromHere, From->StoredDbgRecords.end());
 
   // Clone each DbgVariableRecord and insert into StoreDbgVariableRecords;
   // optionally place them at the start or the end of the list.
-  auto Pos = (InsertAtHead) ? StoredDbgRecords.begin() : StoredDbgRecords.end();
+  auto Pos = (InsertAtHead) ? Dest->StoredDbgRecords.begin()
+                            : Dest->StoredDbgRecords.end();
   for (DbgRecord &DR : Range) {
-    DbgRecord *New = DR.clone();
-    New->setMarker(this);
-    StoredDbgRecords.insert(Pos, *New);
+    DbgRecord *New;
+    if constexpr (TrackDebugValues)
+      New = DR.clone();
+    else
+      New = DR.cloneWithoutTracking();
+    New->setMarker(Dest);
+    Dest->StoredDbgRecords.insert(Pos, *New);
     if (!First)
       First = New;
   }
 
   if (!First)
-    return {StoredDbgRecords.end(), StoredDbgRecords.end()};
+    return {Dest->StoredDbgRecords.end(), Dest->StoredDbgRecords.end()};
 
   if (InsertAtHead)
     // If InsertAtHead is set, we cloned a range onto the front of of the
     // StoredDbgRecords collection, return that range.
-    return {StoredDbgRecords.begin(), Pos};
+    return {Dest->StoredDbgRecords.begin(), Pos};
   else
     // We inserted a block at the end, return that range.
-    return {First->getIterator(), StoredDbgRecords.end()};
+    return {First->getIterator(), Dest->StoredDbgRecords.end()};
+}
+
+iterator_range<simple_ilist<DbgRecord>::iterator> DbgMarker::cloneDebugInfoFrom(
+    DbgMarker *From, std::optional<simple_ilist<DbgRecord>::iterator> FromHere,
+    bool InsertAtHead) {
+  return cloneDebugInfoFromImpl<true>(this, From, FromHere, InsertAtHead);
+}
+
+iterator_range<simple_ilist<DbgRecord>::iterator>
+DbgMarker::cloneDebugInfoFromUntracked(
+    DbgMarker *From, std::optional<simple_ilist<DbgRecord>::iterator> FromHere,
+    bool InsertAtHead) {
+  return cloneDebugInfoFromImpl<false>(this, From, FromHere, InsertAtHead);
 }
