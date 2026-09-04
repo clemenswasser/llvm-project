@@ -2600,16 +2600,41 @@ void InstrRefBasedLDV::placeMLocPHIs(
     RegUnitsToPHIUp.insert_range(FoundRegUnits);
   }
 
+  // Precompute def-blocks per location in a single pass to avoid scanning
+  // all blocks for every location (O(Locs * Blocks) DenseMap lookups).
+  // Transfer maps are sparse: each block defines only a handful of
+  // locations, so inverting the loops is substantially cheaper. Insertion
+  // order matches OrderToBB, preserving the original DefBlocks ordering.
+  unsigned NumLocsForDefs = MTracker->getNumLocs();
+  std::vector<SmallVector<MachineBasicBlock *, 4>> DefBlocksPerLoc(
+      NumLocsForDefs);
+  for (MachineBasicBlock *MBB : OrderToBB) {
+    const auto &TransferFunc = MLocTransfer[MBB->getNumber()];
+    for (const auto &P : TransferFunc) {
+      unsigned Idx = (unsigned)P.first.asU64();
+      if (Idx < DefBlocksPerLoc.size())
+        DefBlocksPerLoc[Idx].push_back(MBB);
+    }
+  }
+
   // Lambda to fetch PHIs for a given location, and write into the PHIBlocks
   // collection.
   SmallVector<MachineBasicBlock *, 32> PHIBlocks;
   auto CollectPHIsForLoc = [&](LocIdx L) {
-    // Collect the set of defs.
+    // Collect the set of defs from the precomputed table.
     SmallPtrSet<MachineBasicBlock *, 32> DefBlocks;
-    for (MachineBasicBlock *MBB : OrderToBB) {
-      const auto &TransferFunc = MLocTransfer[MBB->getNumber()];
-      if (TransferFunc.contains(L))
+    unsigned Idx = (unsigned)L.asU64();
+    if (Idx < DefBlocksPerLoc.size()) {
+      for (MachineBasicBlock *MBB : DefBlocksPerLoc[Idx])
         DefBlocks.insert(MBB);
+    } else {
+      // New location created after precomputation (should be rare).
+      // Fall back to scanning.
+      for (MachineBasicBlock *MBB : OrderToBB) {
+        const auto &TransferFunc = MLocTransfer[MBB->getNumber()];
+        if (TransferFunc.contains(L))
+          DefBlocks.insert(MBB);
+      }
     }
 
     // The entry block defs the location too: it's the live-in / argument value.
