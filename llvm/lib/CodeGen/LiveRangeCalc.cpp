@@ -274,8 +274,10 @@ bool LiveRangeCalc::findReachingDefs(LiveRange &LR, MachineBasicBlock &UseMBB,
     UniqueVNI = false;
 
   // Both updateSSA() and LiveRangeUpdater benefit from ordered blocks, but
-  // neither require it. Skip the sorting overhead for small updates.
-  if (WorkList.size() > 4)
+  // neither require it. Skip the sorting overhead for small updates. Skip it
+  // entirely for a unique reaching def: the blit below uses a single VNI,
+  // so layout order only affects Updater merging, far less than sort cost.
+  if (!UniqueVNI && WorkList.size() > 4)
     array_pod_sort(WorkList.begin(), WorkList.end());
 
   // If a unique reaching def was found, blit in the live ranges immediately.
