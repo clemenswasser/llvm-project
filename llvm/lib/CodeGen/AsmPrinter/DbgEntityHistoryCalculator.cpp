@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/DbgEntityHistoryCalculator.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -24,7 +25,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
-#include <map>
 #include <optional>
 
 using namespace llvm;
@@ -287,13 +287,14 @@ namespace {
 
 // Maps physreg numbers to the variables they describe.
 using InlinedEntity = DbgValueHistoryMap::InlinedEntity;
-using RegDescribedVarsMap = std::map<Register, SmallVector<InlinedEntity, 1>>;
+using RegDescribedVarsMap =
+    DenseMap<Register, SmallVector<InlinedEntity, 1>>;
 
 // Keeps track of the debug value entries that are currently live for each
 // inlined entity. As the history map entries are stored in a SmallVector, they
 // may be moved at insertion of new entries, so store indices rather than
 // pointers.
-using DbgValueEntriesMap = std::map<InlinedEntity, SmallSet<EntryIndex, 1>>;
+using DbgValueEntriesMap = DenseMap<InlinedEntity, SmallSet<EntryIndex, 1>>;
 
 } // end anonymous namespace
 
@@ -337,7 +338,10 @@ static void clobberRegEntries(InlinedEntity Var, Register Reg,
   // the clobbered register, then it is no longer linked to the variable.
   SmallSet<Register, 4> MaybeRemovedRegisters;
   SmallSet<Register, 4> KeepRegisters;
-  for (auto Index : LiveEntries[Var]) {
+  // Single map lookup: operator[] inserts an empty set for first-seen Vars,
+  // matching previous behavior while avoiding repeated hashing/probing.
+  auto &LiveSet = LiveEntries[Var];
+  for (auto Index : LiveSet) {
     auto &Entry = HistMap.getEntry(Var, Index);
     assert(Entry.isDbgValue() && "Not a DBG_VALUE in LiveEntries");
     if (Entry.getInstr()->isDebugEntryValue())
@@ -359,10 +363,9 @@ static void clobberRegEntries(InlinedEntity Var, Register Reg,
     if (!KeepRegisters.contains(Reg))
       FellowRegisters.push_back(Reg);
 
-  // Drop all entries that have ended.
-  auto &Entries = LiveEntries[Var];
+  // Drop all entries that have ended (reuse LiveSet, no second lookup).
   for (auto Index : IndicesToErase)
-    Entries.erase(Index);
+    LiveSet.erase(Index);
 }
 
 /// Add a new debug value for \p Var. Closes all overlapping debug values.
@@ -390,7 +393,9 @@ static void handleNewDebugValue(InlinedEntity Var, const MachineInstr &DV,
     // live entries that overlap.
     SmallVector<EntryIndex, 4> IndicesToErase;
     const DIExpression *DIExpr = DV.getDebugExpression();
-    for (auto Index : LiveEntries[Var]) {
+    // Single lookup for all uses below (inserts empty set for new Vars).
+    auto &LiveSet = LiveEntries[Var];
+    for (auto Index : LiveSet) {
       auto &Entry = HistMap.getEntry(Var, Index);
       assert(Entry.isDbgValue() && "Not a DBG_VALUE in LiveEntries");
       const MachineInstr &DV = *Entry.getInstr();
@@ -413,21 +418,20 @@ static void handleNewDebugValue(InlinedEntity Var, const MachineInstr &DV,
           Register NewReg = Op.getReg();
           if (TrackedRegs.insert_or_assign(NewReg, true).second)
             addRegDescribedVar(RegVars, NewReg, Var);
-          LiveEntries[Var].insert(NewIndex);
+          LiveSet.insert(NewIndex);
         }
       }
     }
 
     // Drop tracking of registers that are no longer used.
-    for (auto I : TrackedRegs)
+    for (const auto &I : TrackedRegs)
       if (!I.second)
         dropRegDescribedVar(RegVars, I.first, Var);
 
     // Drop all entries that have ended, and mark the new entry as live.
-    auto &Entries = LiveEntries[Var];
     for (auto Index : IndicesToErase)
-      Entries.erase(Index);
-    Entries.insert(NewIndex);
+      LiveSet.erase(Index);
+    LiveSet.insert(NewIndex);
   }
 }
 
@@ -528,7 +532,7 @@ void llvm::calculateDbgEntityHistory(const MachineFunction *MF,
           // non-CSRs.
           SmallVector<Register, 32> RegsToClobber;
           // Don't consider SP to be clobbered by register masks.
-          for (auto It : RegVars) {
+          for (const auto &It : RegVars) {
             Register Reg = It.first;
             if (Register(Reg) != SP && Reg.isPhysical() &&
                 MO.clobbersPhysReg(Reg))
