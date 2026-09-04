@@ -101,8 +101,10 @@ public:
   }
 
 private:
-  /// All reaching defs of a given RegUnit for a given MBB.
-  using MBBRegUnitDefs = TinyPtrVector<ReachingDef>;
+  /// All reaching defs of a given RegUnit for a given MBB. Inline 4 avoids
+  /// a heap object for the common 1-4 defs case (TinyPtrVector mallocs a
+  /// vector object as soon as a second def is appended).
+  using MBBRegUnitDefs = SmallVector<ReachingDef, 4>;
   /// All reaching defs of all reg units for a given MBB
   using MBBDefsInfo = std::vector<MBBRegUnitDefs>;
 
