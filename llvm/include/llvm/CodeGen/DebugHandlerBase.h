@@ -92,6 +92,11 @@ protected:
   /// for it.
   DenseMap<const MachineInstr *, MCSymbol *> LabelsBeforeInsn;
 
+  /// 1-entry cache for getLabelBeforeInsn (sequential history-map walks hit
+  /// the same MI as EndLabel then StartLabel). Mutable for const lookup.
+  mutable const MachineInstr *LastLabelBeforeMI = nullptr;
+  mutable MCSymbol *LastLabelBeforeSym = nullptr;
+
   /// Maps instruction with label emitted after instruction.
   DenseMap<const MachineInstr *, MCSymbol *> LabelsAfterInsn;
 

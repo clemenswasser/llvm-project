@@ -140,8 +140,12 @@ void DebugHandlerBase::identifyScopeMarkers() {
 
 // Return Label preceding the instruction.
 MCSymbol *DebugHandlerBase::getLabelBeforeInsn(const MachineInstr *MI) {
+  if (MI == LastLabelBeforeMI)
+    return LastLabelBeforeSym;
   MCSymbol *Label = LabelsBeforeInsn.lookup(MI);
   assert(Label && "Didn't insert label before instruction");
+  LastLabelBeforeMI = MI;
+  LastLabelBeforeSym = Label;
   return Label;
 }
 
@@ -430,6 +434,8 @@ void DebugHandlerBase::endFunction(const MachineFunction *MF) {
   DbgLabels.clear();
   LabelsBeforeInsn.clear();
   LabelsAfterInsn.clear();
+  LastLabelBeforeMI = nullptr;
+  LastLabelBeforeSym = nullptr;
   InstOrdering.clear();
 }
 
