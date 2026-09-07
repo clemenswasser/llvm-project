@@ -168,11 +168,24 @@ public:
       return isa<UndefValue>(V) ? 0 : 1;
 
     using namespace llvm::PatternMatch;
-    if (isa<CastInst>(V) || match(V, m_Neg(m_Value())) ||
-        match(V, m_Not(m_Value())) || match(V, m_FNeg(m_Value())))
+    if (isa<CastInst>(V))
       return 2;
 
-    return 3;
+    auto *I = dyn_cast<Instruction>(V);
+    if (!I)
+      return 3;
+
+    switch (I->getOpcode()) {
+    case Instruction::Sub:
+      return match(V, m_Neg(m_Value())) ? 2 : 3;
+    case Instruction::Xor:
+      return match(V, m_Not(m_Value())) ? 2 : 3;
+    case Instruction::FNeg:
+    case Instruction::FSub:
+      return match(V, m_FNeg(m_Value())) ? 2 : 3;
+    default:
+      return 3;
+    }
   }
 
   /// Predicate canonicalization reduces the number of patterns that need to be
