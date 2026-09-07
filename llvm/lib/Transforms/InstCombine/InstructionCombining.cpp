@@ -6029,7 +6029,7 @@ bool InstCombinerImpl::prepareWorklist(Function &F) {
   bool MadeIRChange = false;
   SmallPtrSet<BasicBlock *, 32> LiveBlocks;
   SmallVector<Instruction *, 128> InstrsForInstructionWorklist;
-  DenseMap<Constant *, Constant *> FoldedConstants;
+  SmallDenseMap<Constant *, Constant *, 8> FoldedConstants;
   AliasScopeTracker SeenAliasScopes;
 
   auto HandleOnlyLiveSuccessor = [&](BasicBlock *BB, BasicBlock *LiveSucc) {
