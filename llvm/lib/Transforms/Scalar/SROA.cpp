@@ -6367,6 +6367,20 @@ std::pair<bool /*Changed*/, bool /*CFGChanged*/> SROA::runSROA(Function &F) {
 }
 
 PreservedAnalyses SROAPass::run(Function &F, FunctionAnalysisManager &AM) {
+  // Fast path: runSROA only examines entry-block allocas. Skip fetching
+  // DominatorTree/AssumptionCache for functions without any, which are
+  // common no-ops (e.g., small getters). Matches runSROA's scope.
+  if (F.empty())
+    return PreservedAnalyses::all();
+  bool HasEntryAlloca = false;
+  for (Instruction &I : F.getEntryBlock()) {
+    if (isa<AllocaInst>(I)) {
+      HasEntryAlloca = true;
+      break;
+    }
+  }
+  if (!HasEntryAlloca)
+    return PreservedAnalyses::all();
   DominatorTree &DT = AM.getResult<DominatorTreeAnalysis>(F);
   AssumptionCache &AC = AM.getResult<AssumptionAnalysis>(F);
   DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
