@@ -126,6 +126,14 @@ static cl::opt<unsigned long> GrowRegionComplexityBudget(
              "limit its budget and bail out once we reach the limit."),
     cl::init(10000), cl::Hidden);
 
+static cl::opt<unsigned> HugeFuncRegionSplitBlockLimit(
+    "ra-huge-func-region-split-block-limit", cl::Hidden, cl::init(500),
+    cl::desc("Skip greedy region splitting in machine functions with more "
+               "basic blocks than this (default = 500). Evaluating region "
+               "split candidates costs O(blocks) per hard live interval "
+               "with little payoff in gigantic functions; skipping falls "
+               "back to single-block splitting, which is always legal."));
+
 static cl::opt<bool> GreedyRegClassPriorityTrumpsGlobalness(
     "greedy-regclass-priority-trumps-globalness",
     cl::desc("Change the greedy register allocator's live range priority "
@@ -1208,6 +1216,14 @@ MCRegister RAGreedy::tryRegionSplit(const LiveInterval &VirtReg,
                                     SmallVectorImpl<Register> &NewVRegs) {
   if (!TRI->shouldRegionSplitForVirtReg(*MF, VirtReg))
     return MCRegister::NoRegister;
+
+  // In gigantic functions, modeling region split candidates costs O(blocks)
+  // per hard live interval while rarely beating single-block splitting.
+  // Skip conservatively using the per-function flag from run() so this
+  // check stays O(1). trySplit falls back to tryBlockSplit below.
+  if (SkipRegionSplitForHugeFunc)
+    return MCRegister::NoRegister;
+
   unsigned NumCands = 0;
   BlockFrequency SpillCost = calcBlockSplitCost();
   BlockFrequency BestCost;
@@ -2945,6 +2961,12 @@ bool RAGreedy::run(MachineFunction &mf) {
 
   MF = &mf;
   TII = MF->getSubtarget().getInstrInfo();
+
+  // One O(blocks) walk per function (not per interval): arm the
+  // conservative skip of region-split candidate modeling in gigantic
+  // machine functions. tryRegionSplit falls back to single-block
+  // splitting, so normal-sized functions (flag clear) are unaffected.
+  SkipRegionSplitForHugeFunc = MF->size() > HugeFuncRegionSplitBlockLimit;
 
   if (VerifyEnabled)
     MF->verify(LIS, Indexes, "Before greedy register allocator", &errs());

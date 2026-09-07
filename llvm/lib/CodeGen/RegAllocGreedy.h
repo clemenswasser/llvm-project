@@ -167,6 +167,13 @@ private:
   // context
   MachineFunction *MF = nullptr;
 
+  // True when the current machine function is so large that greedy region
+  // splitting (O(blocks) candidate modeling per hard live interval) is
+  // skipped in favor of single-block splitting. Computed once per function
+  // in run(); the per-interval check in tryRegionSplit must stay O(1)
+  // (MachineFunction::size() walks all blocks).
+  bool SkipRegionSplitForHugeFunc = false;
+
   // Shortcuts to some useful interface.
   const TargetInstrInfo *TII = nullptr;
 
