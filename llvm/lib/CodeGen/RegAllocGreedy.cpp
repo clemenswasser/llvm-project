@@ -127,12 +127,12 @@ static cl::opt<unsigned long> GrowRegionComplexityBudget(
     cl::init(10000), cl::Hidden);
 
 static cl::opt<unsigned> HugeFuncRegionSplitBlockLimit(
-    "ra-huge-func-region-split-block-limit", cl::Hidden, cl::init(500),
+    "ra-huge-func-region-split-block-limit", cl::Hidden, cl::init(250),
     cl::desc("Skip greedy region splitting in machine functions with more "
-               "basic blocks than this (default = 500). Evaluating region "
-               "split candidates costs O(blocks) per hard live interval "
-               "with little payoff in gigantic functions; skipping falls "
-               "back to single-block splitting, which is always legal."));
+             "basic blocks than this (default = 250). Evaluating region "
+             "split candidates costs O(blocks) per hard live interval "
+             "with little payoff in gigantic functions; skipping falls "
+             "back to single-block splitting, which is always legal."));
 
 static cl::opt<bool> GreedyRegClassPriorityTrumpsGlobalness(
     "greedy-regclass-priority-trumps-globalness",
