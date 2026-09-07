@@ -106,9 +106,14 @@ void DwarfFile::addScopeVariable(LexicalScope *LS, DbgVariable *Var) {
   auto &ScopeVars = ScopeVariables[LS];
   const DILocalVariable *DV = Var->getVariable();
   if (unsigned ArgNum = DV->getArg()) {
-    auto Ret = ScopeVars.Args.insert({ArgNum, Var});
-    assert(Ret.second);
-    (void)Ret;
+    auto &Args = ScopeVars.Args;
+    auto It = llvm::lower_bound(
+        Args, ArgNum,
+        [](const std::pair<unsigned, DbgVariable *> &P, unsigned V) {
+          return P.first < V;
+        });
+    assert((It == Args.end() || It->first != ArgNum) && "Duplicate ArgNo");
+    Args.insert(It, {ArgNum, Var});
   } else {
     ScopeVars.Locals.push_back(Var);
   }

@@ -13,10 +13,10 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/DIE.h"
 #include "llvm/Support/Allocator.h"
-#include <map>
 #include <memory>
 #include <utility>
 
@@ -81,9 +81,10 @@ class DwarfFile {
 
   /// The variables of a lexical scope.
   struct ScopeVars {
-    /// We need to sort Args by ArgNo and check for duplicates. This could also
-    /// be implemented as a list or vector + std::lower_bound().
-    std::map<unsigned, DbgVariable *> Args;
+    /// Function arguments sorted by ArgNo. Typically very few (<10), so a
+    /// sorted SmallVector avoids std::map RB-tree allocations. Maintained
+    /// sorted; see addScopeVariable.
+    SmallVector<std::pair<unsigned, DbgVariable *>, 8> Args;
     SmallVector<DbgVariable *, 8> Locals;
   };
   /// Collection of DbgVariables of each lexical scope.
