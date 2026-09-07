@@ -2043,6 +2043,8 @@ bool DIExpression::isEqualExpression(const DIExpression *FirstExpr,
                                      bool FirstIndirect,
                                      const DIExpression *SecondExpr,
                                      bool SecondIndirect) {
+  if (FirstExpr == SecondExpr && FirstIndirect == SecondIndirect)
+    return true;
   SmallVector<uint64_t, 8> FirstOps;
   DIExpression::canonicalizeExpressionOps(FirstOps, FirstExpr, FirstIndirect);
   SmallVector<uint64_t, 8> SecondOps;
