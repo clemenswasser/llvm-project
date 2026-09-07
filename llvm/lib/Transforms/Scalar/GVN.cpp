@@ -130,12 +130,12 @@ static cl::opt<uint32_t> MaxNumDeps(
     cl::desc("Max number of dependences to attempt Load PRE (default = 100)"));
 
 static cl::opt<unsigned> HugeFuncNonLocalGVNBlockLimit(
-    "gvn-huge-func-nonlocal-block-limit", cl::Hidden, cl::init(500),
+    "gvn-huge-func-nonlocal-block-limit", cl::Hidden, cl::init(250),
     cl::desc("Skip GVN non-local load handling in functions with more "
-               "basic blocks than this (default = 500). The non-local "
-               "predecessor walk costs O(blocks) per load with little "
-               "payoff in gigantic functions; skipping is conservative "
-               "(the load is simply left in place)."));
+             "basic blocks than this (default = 250). The non-local "
+             "predecessor walk costs O(blocks) per load with little "
+             "payoff in gigantic functions; skipping is conservative "
+             "(the load is simply left in place)."));
 
 static cl::opt<uint32_t> MaxNumReachingBlocks(
     "gvn-max-num-reaching-blocks", cl::Hidden, cl::init(200),
