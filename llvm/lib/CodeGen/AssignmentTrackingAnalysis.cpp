@@ -9,6 +9,7 @@
 #include "llvm/CodeGen/AssignmentTrackingAnalysis.h"
 #include "LiveDebugValues/LiveDebugValues.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/IntervalMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -38,7 +39,6 @@
 #include <optional>
 #include <queue>
 #include <sstream>
-#include <unordered_map>
 
 using namespace llvm;
 #define DEBUG_TYPE "debug-ata"
@@ -80,21 +80,13 @@ template <> struct llvm::DenseMapInfo<VariableID> {
 
 using VarLocInsertPt = PointerUnion<const Instruction *, const DbgRecord *>;
 
-template <> struct std::hash<VarLocInsertPt> {
-  std::size_t operator()(const VarLocInsertPt &Arg) const {
-    return std::hash<void *>()(Arg.getOpaqueValue());
-  }
-};
-
 /// Helper class to build FunctionVarLocs, since that class isn't easy to
 /// modify. TODO: There's not a great deal of value in the split, it could be
 /// worth merging the two classes.
 class FunctionVarLocsBuilder {
   friend FunctionVarLocs;
   UniqueVector<DebugVariable> Variables;
-  // Use an unordered_map so we don't invalidate iterators after
-  // insert/modifications.
-  std::unordered_map<VarLocInsertPt, SmallVector<VarLocInfo>> VarLocsBeforeInst;
+  DenseMap<VarLocInsertPt, SmallVector<VarLocInfo>> VarLocsBeforeInst;
 
   SmallVector<VarLocInfo> SingleLocVars;
 
