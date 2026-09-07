@@ -256,6 +256,12 @@ private:
   AAResults *AA = nullptr;
   MemorySSAUpdater *MSSAU = nullptr;
 
+  // True when the current function is so large that GVN's non-local load
+  // handling (O(blocks) MemDep walk per load) is skipped conservatively.
+  // Computed once per function in runImpl; the per-load check in
+  // processNonLocalLoad must stay O(1) (Function::size() is O(blocks)).
+  bool SkipNonLocalLoadsForHugeFunc = false;
+
   ValueTable VN;
 
   /// A mapping from value numbers to lists of Value*'s that

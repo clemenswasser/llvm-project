@@ -129,6 +129,14 @@ static cl::opt<uint32_t> MaxNumDeps(
     "gvn-max-num-deps", cl::Hidden, cl::init(100),
     cl::desc("Max number of dependences to attempt Load PRE (default = 100)"));
 
+static cl::opt<unsigned> HugeFuncNonLocalGVNBlockLimit(
+    "gvn-huge-func-nonlocal-block-limit", cl::Hidden, cl::init(500),
+    cl::desc("Skip GVN non-local load handling in functions with more "
+               "basic blocks than this (default = 500). The non-local "
+               "predecessor walk costs O(blocks) per load with little "
+               "payoff in gigantic functions; skipping is conservative "
+               "(the load is simply left in place)."));
+
 static cl::opt<uint32_t> MaxNumReachingBlocks(
     "gvn-max-num-reaching-blocks", cl::Hidden, cl::init(200),
     cl::desc("Max number of blocks scanned per load in the MemorySSA "
@@ -2068,6 +2076,15 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
       Load->getFunction()->hasFnAttribute(Attribute::SanitizeHWAddress))
     return false;
 
+  // In gigantic functions the non-local predecessor walk below costs
+  // O(blocks) per load (bounded only by memdep's per-query limits) while
+  // rarely eliminating anything. Skip it conservatively; normal-sized
+  // functions never take this path and are unaffected. Uses the per-function
+  // flag from runImpl so this check stays O(1). Returning false leaves the
+  // load in place, which is always safe.
+  if (SkipNonLocalLoadsForHugeFunc)
+    return false;
+
   // Find the non-local dependencies of the load.
   LoadDepVect Deps;
   MD->getNonLocalPointerDependency(Load, Deps);
@@ -3521,6 +3538,11 @@ bool GVNPass::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
     Changed |= RemovedBlock;
   }
   DTU.flush();
+
+  // One O(blocks) walk per function (not per load): arm the conservative
+  // skip of non-local load handling in gigantic functions. Block merges
+  // above can only shrink the count slightly, which keeps this conservative.
+  SkipNonLocalLoadsForHugeFunc = F.size() > HugeFuncNonLocalGVNBlockLimit;
 
   unsigned Iteration = 0;
   while (ShouldContinue) {
