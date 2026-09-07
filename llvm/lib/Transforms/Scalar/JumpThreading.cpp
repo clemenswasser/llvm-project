@@ -239,6 +239,17 @@ static void updatePredecessorProfileMetadata(PHINode *PN, BasicBlock *BB) {
 
 PreservedAnalyses JumpThreadingPass::run(Function &F,
                                          FunctionAnalysisManager &AM) {
+  // Fast path: single-block functions ending in ret/unreachable have no
+  // edges to thread. Avoid fetching TTI/TLI/LVI/AA/DT for these common
+  // tiny no-ops (e.g., getters). Single-block loops (br to self) fall
+  // through to the full pass conservatively.
+  if (F.empty())
+    return PreservedAnalyses::all();
+  if (std::next(F.begin()) == F.end()) {
+    Instruction *TI = F.front().getTerminator();
+    if (isa<ReturnInst>(TI) || isa<UnreachableInst>(TI))
+      return PreservedAnalyses::all();
+  }
   auto &TTI = AM.getResult<TargetIRAnalysis>(F);
   // Jump Threading has no sense for the targets with divergent CF
   if (TTI.hasBranchDivergence(&F))
