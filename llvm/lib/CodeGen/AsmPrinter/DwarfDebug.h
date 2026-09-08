@@ -128,6 +128,12 @@ struct EntryValueInfo {
 
 // Namespace for alternatives of a DbgVariable.
 namespace Loc {
+/// Memoizes DIExpression::convertToNonVariadicExpression, a pure function of
+/// the (uniqued, immutable) expression node. A nullptr value means the
+/// expression is not convertible and stays variadic. One instance per emitted
+/// function suffices: entries cannot be invalidated while emitting it.
+using ExprConversionCache =
+    SmallDenseMap<const DIExpression *, const DIExpression *, 4>;
 /// Single value location description.
 class Single {
   std::unique_ptr<DbgValueLoc> ValueLoc;
@@ -135,7 +141,7 @@ class Single {
 
 public:
   explicit Single(DbgValueLoc ValueLoc);
-  explicit Single(const MachineInstr *DbgValue);
+  explicit Single(const MachineInstr *DbgValue, ExprConversionCache &Cache);
   const DbgValueLoc &getValueLoc() const { return *ValueLoc; }
   const DIExpression *getExpr() const { return Expr; }
 };
@@ -689,7 +695,8 @@ private:
   /// list has only one entry that is valid for entire variable's
   /// scope return true.
   bool buildLocationList(SmallVectorImpl<DebugLocEntry> &DebugLoc,
-                         const DbgValueHistoryMap::Entries &Entries);
+                         const DbgValueHistoryMap::Entries &Entries,
+                         Loc::ExprConversionCache &Cache);
 
   /// Collect variable information from the side table maintained by MF.
   void collectVariableInfoFromMFTable(DwarfCompileUnit &TheCU,

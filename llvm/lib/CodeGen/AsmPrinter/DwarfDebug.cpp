@@ -237,16 +237,30 @@ const DIType *DbgVariable::getType() const {
 }
 
 /// Get .debug_loc entry for the instruction range starting at MI.
-static DbgValueLoc getDebugLocValue(const MachineInstr *MI) {
+static DbgValueLoc getDebugLocValue(const MachineInstr *MI,
+                                    Loc::ExprConversionCache &Cache) {
   const DIExpression *Expr = MI->getDebugExpression();
-  auto SingleLocExprOpt = DIExpression::convertToNonVariadicExpression(Expr);
-  const bool IsVariadic = !SingleLocExprOpt;
+  // The same expression node recurs across a variable's history entries (and
+  // the empty expression across variables), while the conversion result
+  // depends only on the node. Memoize it instead of re-walking the operands
+  // and re-probing uniquing for every debug instruction.
+  auto It = Cache.find(Expr);
+  const DIExpression *SingleLocExpr;
+  if (It != Cache.end()) {
+    SingleLocExpr = It->second;
+  } else {
+    auto SingleLocExprOpt =
+        DIExpression::convertToNonVariadicExpression(Expr);
+    SingleLocExpr = SingleLocExprOpt ? *SingleLocExprOpt : nullptr;
+    Cache.insert({Expr, SingleLocExpr});
+  }
+  const bool IsVariadic = !SingleLocExpr;
   // If we have a variadic debug value instruction that is equivalent to a
   // non-variadic instruction, then convert it to non-variadic form here.
   if (!IsVariadic && !MI->isNonListDebugValue()) {
     assert(MI->getNumDebugOperands() == 1 &&
            "Mismatched DIExpression and debug operands for debug instruction.");
-    Expr = *SingleLocExprOpt;
+    Expr = SingleLocExpr;
   }
   assert(MI->getNumOperands() >= 3);
   SmallVector<DbgValueLocEntry, 4> DbgValueLocEntries;
@@ -291,8 +305,8 @@ Loc::Single::Single(DbgValueLoc ValueLoc)
     Expr = nullptr;
 }
 
-Loc::Single::Single(const MachineInstr *DbgValue)
-    : Single(getDebugLocValue(DbgValue)) {}
+Loc::Single::Single(const MachineInstr *DbgValue, ExprConversionCache &Cache)
+    : Single(getDebugLocValue(DbgValue, Cache)) {}
 
 const std::set<FrameIndexExpr> &Loc::MMI::getFrameIndexExprs() const {
   return FrameIndexExprs;
@@ -1834,7 +1848,8 @@ static bool validThroughout(LexicalScopes &LScopes,
 // [3-4)    [(reg1, fragment 32, 32), (123, fragment 64, 32)]
 // [4-)     [(@g, fragment 0, 96)]
 bool DwarfDebug::buildLocationList(SmallVectorImpl<DebugLocEntry> &DebugLoc,
-                                   const DbgValueHistoryMap::Entries &Entries) {
+                                   const DbgValueHistoryMap::Entries &Entries,
+                                   Loc::ExprConversionCache &Cache) {
   using OpenRange =
       std::pair<DbgValueHistoryMap::EntryIndex, DbgValueLoc>;
   SmallVector<OpenRange, 4> OpenRanges;
@@ -1883,7 +1898,7 @@ bool DwarfDebug::buildLocationList(SmallVectorImpl<DebugLocEntry> &DebugLoc,
       // all fragments are undef then the whole location list entry is
       // redundant.
       if (!Instr->isUndefDebugValue()) {
-        auto Value = getDebugLocValue(Instr);
+        auto Value = getDebugLocValue(Instr, Cache);
         OpenRanges.emplace_back(EI->getEndIndex(), Value);
 
         // TODO: Add support for single value fragment locations.
@@ -2023,6 +2038,11 @@ void DwarfDebug::collectEntityInfo(DwarfCompileUnit &TheCU,
   // Grab the variable info that was squirreled away in the MMI side-table.
   collectVariableInfoFromMFTable(TheCU, Processed);
 
+  // Per-function memoization for the debug-expression conversion in
+  // getDebugLocValue below. Fresh per function, so entries (which only live
+  // as long as the function's debug instructions) cannot go stale.
+  Loc::ExprConversionCache ConvertedExprs;
+
   for (const auto &I : DbgValues) {
     InlinedEntity IV = I.first;
     if (Processed.count(IV))
@@ -2063,7 +2083,7 @@ void DwarfDebug::collectEntityInfo(DwarfCompileUnit &TheCU,
       const auto *End =
           SingleValueWithClobber ? HistoryMapEntries[1].getInstr() : nullptr;
       if (validThroughout(LScopes, MInsn, End, getInstOrdering())) {
-        RegVar->emplace<Loc::Single>(MInsn);
+        RegVar->emplace<Loc::Single>(MInsn, ConvertedExprs);
         continue;
       }
     }
@@ -2073,7 +2093,8 @@ void DwarfDebug::collectEntityInfo(DwarfCompileUnit &TheCU,
 
     // Build the location list for this variable.
     SmallVector<DebugLocEntry, 8> Entries;
-    bool isValidSingleLocation = buildLocationList(Entries, HistoryMapEntries);
+    bool isValidSingleLocation =
+        buildLocationList(Entries, HistoryMapEntries, ConvertedExprs);
 
     // Check whether buildLocationList managed to merge all locations to one
     // that is valid throughout the variable's scope. If so, produce single
