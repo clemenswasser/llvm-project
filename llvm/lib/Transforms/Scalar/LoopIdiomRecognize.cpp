@@ -348,6 +348,18 @@ static void deleteDeadInstruction(Instruction *I) {
 //
 //===----------------------------------------------------------------------===//
 
+// Store-less loops cannot match countable idioms (all rewrite writes); skipping
+// the SCEV backedge-taken analysis and countable scans for them. Safety
+// (SafetyInfo) and coverage (noncountable idioms, CRC) are preserved; see
+// runOnLoop below.
+static bool loopHasWrites(Loop *L) {
+  for (BasicBlock *BB : L->blocks())
+    for (Instruction &I : *BB)
+      if (I.mayWriteToMemory())
+        return true;
+  return false;
+}
+
 bool LoopIdiomRecognize::runOnLoop(Loop *L) {
   CurLoop = L;
   // If the loop could not be converted to canonical form, it must have an
@@ -375,9 +387,25 @@ bool LoopIdiomRecognize::runOnLoop(Loop *L) {
   HasMemcpy = TLI->has(LibFunc_memcpy);
 
   if (HasMemset || HasMemsetPattern || ForceMemsetPatternIntrinsic ||
-      HasMemcpy || !DisableLIRP::HashRecognize)
+      HasMemcpy || !DisableLIRP::HashRecognize) {
+    // Skip the costly SCEV backedge-taken analysis and countable scans for
+    // loops without writes (see loopHasWrites above).
+    if (!loopHasWrites(CurLoop)) {
+      SimpleLoopSafetyInfo SafetyInfo;
+      SafetyInfo.computeLoopSafetyInfo(CurLoop);
+      if (SafetyInfo.anyBlockMayThrow())
+        return false;
+      bool MadeChange = false;
+      if (!DisableLIRP::HashRecognize &&
+          CRCStrategy != CRCStrategyKind::Disable)
+        if (auto Res = HashRecognize(*CurLoop, *SE).getResult())
+          MadeChange |= optimizeCRCLoop(*Res);
+      MadeChange |= runOnNoncountableLoop();
+      return MadeChange;
+    }
     if (SE->hasLoopInvariantBackedgeTakenCount(L))
       return runOnCountableLoop();
+  }
 
   return runOnNoncountableLoop();
 }
