@@ -3097,8 +3097,17 @@ void InstrRefBasedLDV::getBlocksForScope(
     const DILocation *DILoc,
     SmallPtrSetImpl<const MachineBasicBlock *> &BlocksToExplore,
     const SmallPtrSetImpl<MachineBasicBlock *> &AssignBlocks) {
-  // Get the set of "normal" in-lexical-scope blocks.
-  LS.getMachineBasicBlocks(DILoc, BlocksToExplore);
+  // Get the set of "normal" in-lexical-scope blocks (cached per run).
+  auto CacheIt = ScopeBlocksCache.find(DILoc);
+  if (CacheIt != ScopeBlocksCache.end()) {
+    BlocksToExplore.insert_range(CacheIt->second);
+  } else {
+    SmallPtrSet<const MachineBasicBlock *, 16> FreshBlocks;
+    LS.getMachineBasicBlocks(DILoc, FreshBlocks);
+    BlocksToExplore.insert_range(FreshBlocks);
+    auto &Stored = ScopeBlocksCache[DILoc];
+    Stored.assign(FreshBlocks.begin(), FreshBlocks.end());
+  }
 
   // VarLoc LiveDebugValues tracks variable locations that are defined in
   // blocks not in scope. This is something we could legitimately ignore, but
@@ -3724,6 +3733,8 @@ bool InstrRefBasedLDV::ExtendRanges(MachineFunction &MF,
   TFI->getCalleeSaves(MF, CalleeSavedRegs);
   MFI = &MF.getFrameInfo();
   LS.scanFunction(MF);
+  // Paired reset for the per-run scope-blocks cache (see member comment).
+  ScopeBlocksCache.clear();
 
   const auto &STI = MF.getSubtarget();
   AdjustsStackInCalls = MFI->adjustsStack() &&

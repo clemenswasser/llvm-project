@@ -1150,6 +1150,13 @@ private:
   BitVector CalleeSavedRegs;
   LexicalScopes LS;
 
+  // Cache of "normal" in-lexical-scope blocks per DILocation for the current
+  // function run (see getBlocksForScope). Pure function of (LS, DILocation);
+  // cleared in ExtendRanges alongside LS.scanFunction. Saves re-walking scope
+  // children on the second and third queries of each scope.
+  DenseMap<const DILocation *, SmallVector<const MachineBasicBlock *, 16>>
+      ScopeBlocksCache;
+
   // An empty DIExpression. Used default / placeholder DbgValueProperties
   // objects, as we can't have null expressions.
   const DIExpression *EmptyExpr;
