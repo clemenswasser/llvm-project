@@ -3194,16 +3194,25 @@ void InstrRefBasedLDV::buildVLocValueMap(
   for (const auto *MBB : BlocksToExplore)
     MutBlocksToExplore.insert(const_cast<MachineBasicBlock *>(MBB));
 
-  // Picks out relevants blocks RPO order and sort them. Sort their
-  // order-numbers and map back to MBB pointers later, to avoid repeated
-  // DenseMap queries during comparisons.
-  for (const auto *MBB : BlocksToExplore)
-    BlockOrderNums.push_back(BBToOrder[MBB]);
+  // Picks out relevant blocks in RPO order. For scopes covering a large
+  // fraction of the function, filtering the function-wide RPO vector is
+  // cheaper than sorting per-scope order numbers; both yield the identical
+  // sequence (RPO restricted to the set), so output is unaffected. Sorting
+  // wins for small scopes.
+  if (BlocksToExplore.size() > 8 &&
+      BlocksToExplore.size() * 4 >= BBToOrder.size()) {
+    for (MachineBasicBlock *MBB : OrderToBB)
+      if (BlocksToExplore.contains(MBB))
+        BlockOrders.push_back(MBB);
+  } else {
+    for (const auto *MBB : BlocksToExplore)
+      BlockOrderNums.push_back(BBToOrder[MBB]);
 
-  llvm::sort(BlockOrderNums);
-  for (unsigned int I : BlockOrderNums)
-    BlockOrders.push_back(OrderToBB[I]);
-  BlockOrderNums.clear();
+    llvm::sort(BlockOrderNums);
+    for (unsigned int I : BlockOrderNums)
+      BlockOrders.push_back(OrderToBB[I]);
+    BlockOrderNums.clear();
+  }
   unsigned NumBlocks = BlockOrders.size();
 
   // Allocate some vectors for storing the live ins and live outs. Large.
