@@ -377,6 +377,17 @@ void SimplifyCFGPass::printPipeline(
 
 PreservedAnalyses SimplifyCFGPass::run(Function &F,
                                        FunctionAnalysisManager &AM) {
+  // A function with one basic block ending in a return has no CFG to simplify
+  // when the block also has no call and no memory access: every transformation
+  // in simplifyOnce needs predecessors, PHIs, a branch-like terminator, or a
+  // call/memory instruction that can be turned into unreachable.
+  // ConstantFoldTerminator only handles branches and switches.
+  if (F.size() == 1 && isa<ReturnInst>(F.front().getTerminator()) &&
+      llvm::none_of(F.front(), [](const Instruction &I) {
+        return I.mayReadOrWriteMemory() || isa<CallBase>(I);
+      }))
+    return PreservedAnalyses::all();
+
   auto &TTI = AM.getResult<TargetIRAnalysis>(F);
   Options.AC = &AM.getResult<AssumptionAnalysis>(F);
   DominatorTree *DT = nullptr;

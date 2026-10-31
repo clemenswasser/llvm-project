@@ -2606,7 +2606,7 @@ void InstrRefBasedLDV::placeMLocPHIs(
   // locations, so inverting the loops is substantially cheaper. Insertion
   // order matches OrderToBB, preserving the original DefBlocks ordering.
   unsigned NumLocsForDefs = MTracker->getNumLocs();
-  std::vector<SmallVector<MachineBasicBlock *, 4>> DefBlocksPerLoc(
+  std::vector<SmallVector<MachineBasicBlock *, 16>> DefBlocksPerLoc(
       NumLocsForDefs);
   for (MachineBasicBlock *MBB : OrderToBB) {
     const auto &TransferFunc = MLocTransfer[MBB->getNumber()];
@@ -2620,33 +2620,87 @@ void InstrRefBasedLDV::placeMLocPHIs(
   // Lambda to fetch PHIs for a given location, and write into the PHIBlocks
   // collection.
   SmallVector<MachineBasicBlock *, 32> PHIBlocks;
+
+  // The IDF result is a pure function of the function dominator tree, the
+  // constant AllBlocks set, and the def-block set. Alias registers and stack
+  // indices frequently have identical def sets, so memoize the PHI list and
+  // avoid repeating the same dominance walk. Defs are kept in OrderToBB order,
+  // which is deterministic for a given set.
+  struct PHICacheEntry {
+    SmallVector<MachineBasicBlock *, 16> Defs;
+    SmallVector<MachineBasicBlock *, 8> PHIs;
+    bool HasEntry = false;
+  };
+  SmallVector<PHICacheEntry, 16> PHICache;
+  PHICache.reserve(32);
+  DenseMap<uint64_t, SmallVector<unsigned, 2>> PHICacheIndex;
+  PHICacheIndex.reserve(32);
+  SmallPtrSet<MachineBasicBlock *, 32> DefBlocks;
+
+  MachineBasicBlock *Entry = &*MF.begin();
+
   auto CollectPHIsForLoc = [&](LocIdx L) {
-    // Collect the set of defs from the precomputed table.
-    SmallPtrSet<MachineBasicBlock *, 32> DefBlocks;
+    // The def set is the precomputed def vector plus the entry block (which
+    // defines the live-in / argument value). Keep a reference when possible:
+    // only a cache miss needs to copy the vector.
     unsigned Idx = (unsigned)L.asU64();
+    SmallVector<MachineBasicBlock *, 16> ScannedDefs;
+    ArrayRef<MachineBasicBlock *> Defs;
     if (Idx < DefBlocksPerLoc.size()) {
-      for (MachineBasicBlock *MBB : DefBlocksPerLoc[Idx])
-        DefBlocks.insert(MBB);
+      Defs = DefBlocksPerLoc[Idx];
     } else {
       // New location created after precomputation (should be rare).
       // Fall back to scanning.
       for (MachineBasicBlock *MBB : OrderToBB) {
         const auto &TransferFunc = MLocTransfer[MBB->getNumber()];
         if (TransferFunc.contains(L))
-          DefBlocks.insert(MBB);
+          ScannedDefs.push_back(MBB);
+      }
+      Defs = ScannedDefs;
+    }
+
+    // Everything is trivially live through without any defs.
+    if (Defs.empty()) {
+      PHIBlocks.clear();
+      return;
+    }
+    bool HasEntry = is_contained(Defs, Entry);
+
+    // Look up an earlier IDF result for this exact def set.
+    uint64_t Hash = 1469598103934665603ULL;
+    for (const MachineBasicBlock *MBB : Defs) {
+      Hash ^= MBB->getNumber();
+      Hash *= 1099511628211ULL;
+    }
+    Hash ^= HasEntry;
+    Hash *= 1099511628211ULL;
+    auto It = PHICacheIndex.find(Hash);
+    if (It != PHICacheIndex.end()) {
+      for (unsigned EntryIdx : It->second) {
+        const PHICacheEntry &Cached = PHICache[EntryIdx];
+        if (Cached.HasEntry != HasEntry || Cached.Defs != Defs)
+          continue;
+        PHIBlocks.assign(Cached.PHIs.begin(), Cached.PHIs.end());
+        return;
       }
     }
 
-    // The entry block defs the location too: it's the live-in / argument value.
-    // Only insert if there are other defs though; everything is trivially live
-    // through otherwise.
-    if (!DefBlocks.empty())
-      DefBlocks.insert(&*MF.begin());
-
     // Ask the SSA construction algorithm where we should put PHIs. Clear
     // anything that might have been hanging around from earlier.
+    DefBlocks.clear();
+    DefBlocks.insert(Defs.begin(), Defs.end());
+    if (!HasEntry)
+      DefBlocks.insert(Entry);
     PHIBlocks.clear();
     BlockPHIPlacement(AllBlocks, DefBlocks, PHIBlocks);
+
+    unsigned EntryIdx = PHICache.size();
+    PHICache.push_back({SmallVector<MachineBasicBlock *, 16>(Defs.begin(),
+                                                             Defs.end()),
+                        SmallVector<MachineBasicBlock *, 8>(PHIBlocks.begin(),
+                                                            PHIBlocks.end()),
+                        HasEntry});
+    PHICacheIndex[Hash].push_back(EntryIdx);
   };
 
   auto InstallPHIsAtLoc = [&PHIBlocks, &MInLocs](LocIdx L) {
@@ -3211,6 +3265,30 @@ void InstrRefBasedLDV::buildVLocValueMap(
   // which propagates from a single block into many artificial ones.
   if (BlocksToExplore.size() == 1)
     return;
+
+  // A single-variable scope whose variable has only one definition does not
+  // need the per-scope dataflow state: the value is assigned directly to every
+  // dominated block. Detect this before building the block order and the
+  // live-in/live-out arrays, which dominate the prologue for the many small
+  // scopes in a function.
+  if (VarsWeCareAbout.size() == 1) {
+    DebugVariableID OnlyVar = *VarsWeCareAbout.begin();
+    SmallPtrSet<MachineBasicBlock *, 32> DefBlocks;
+    for (const MachineBasicBlock *ExpMBB : BlocksToExplore) {
+      auto &TransferFunc = AllTheVLocs[ExpMBB->getNumber()].Vars;
+      if (TransferFunc.contains(OnlyVar))
+        DefBlocks.insert(const_cast<MachineBasicBlock *>(ExpMBB));
+    }
+    if (DefBlocks.size() == 1) {
+      // IDF wants mutable pointers; neither side mutates them.
+      SmallPtrSet<MachineBasicBlock *, 8> MutBlocks;
+      for (const auto *MBB : BlocksToExplore)
+        MutBlocks.insert(const_cast<MachineBasicBlock *>(MBB));
+      placePHIsForSingleVarDefinition(MutBlocks, *DefBlocks.begin(),
+                                      AllTheVLocs, OnlyVar, Output);
+      return;
+    }
+  }
 
   // Convert a const set to a non-const set. LexicalScopes
   // getMachineBasicBlocks returns const MBB pointers, IDF wants mutable ones.
