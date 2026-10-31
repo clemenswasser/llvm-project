@@ -39,6 +39,7 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/Allocator.h"
 #include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/IR/Function.h"
@@ -325,7 +326,8 @@ public:
     // FIXME: We should use a much lighter weight system than the usual
     // polymorphic pattern because we don't own AAResult. It should
     // ideally involve two pointers and no separate allocation.
-    AAs.emplace_back(new Model<AAResultT>(AAResult, *this));
+    // Model<T> only stores references, so bump allocation is safe.
+    AAs.push_back(new (Allocator) Model<AAResultT>(AAResult, *this));
   }
 
   /// Register a function analysis ID that the results aggregation depends on.
@@ -592,7 +594,10 @@ private:
 
   const TargetLibraryInfo &TLI;
 
-  std::vector<std::unique_ptr<Concept>> AAs;
+  /// Storage for the per-analysis wrapper objects. They are trivially
+  /// destructible (they only hold references), so they are bump allocated.
+  BumpPtrAllocatorImpl<MallocAllocator, 256> Allocator;
+  SmallVector<Concept *, 4> AAs;
 
   std::vector<AnalysisKey *> AADeps;
 
