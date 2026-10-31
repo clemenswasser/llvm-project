@@ -134,6 +134,8 @@ public:
     }
   };
 
+  using LiveInVector = SmallVector<RegisterMaskPair, 2>;
+
 private:
   using Instructions = ilist<MachineInstr, ilist_sentinel_tracking<true>>;
 
@@ -166,7 +168,6 @@ private:
   std::optional<uint64_t> IrrLoopHeaderWeight;
 
   /// Keep track of the physical registers that are livein of the basicblock.
-  using LiveInVector = std::vector<RegisterMaskPair>;
   LiveInVector LiveIns;
 
   /// Alignment of the basic block. One if the basic block does not need to be
@@ -495,7 +496,7 @@ public:
 
   /// Clear the live in list, and return the removed live in's in \p OldLiveIns.
   /// Requires that the vector \p OldLiveIns is empty.
-  LLVM_ABI void clearLiveIns(std::vector<RegisterMaskPair> &OldLiveIns);
+  LLVM_ABI void clearLiveIns(LiveInVector &OldLiveIns);
 
   /// Add PhysReg as live in to this block, and ensure that there is a copy of
   /// PhysReg to a virtual register of class RC. Return the virtual register
@@ -539,7 +540,7 @@ public:
   /// Remove entry from the livein set and return iterator to the next.
   LLVM_ABI livein_iterator removeLiveIn(livein_iterator I);
 
-  const std::vector<RegisterMaskPair> &getLiveIns() const { return LiveIns; }
+  const LiveInVector &getLiveIns() const { return LiveIns; }
 
   class liveout_iterator {
   public:
