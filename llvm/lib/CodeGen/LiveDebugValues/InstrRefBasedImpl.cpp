@@ -3097,17 +3097,18 @@ void InstrRefBasedLDV::getBlocksForScope(
     const DILocation *DILoc,
     SmallPtrSetImpl<const MachineBasicBlock *> &BlocksToExplore,
     const SmallPtrSetImpl<MachineBasicBlock *> &AssignBlocks) {
-  // Get the set of "normal" in-lexical-scope blocks (cached per run).
+  // Get the full set of blocks for this scope (cached per run). This is a
+  // pure function of (LS, DILocation, AssignBlocks), and callers always pass
+  // an empty BlocksToExplore, so the expanded set can be reused verbatim.
   auto CacheIt = ScopeBlocksCache.find(DILoc);
   if (CacheIt != ScopeBlocksCache.end()) {
     BlocksToExplore.insert_range(CacheIt->second);
-  } else {
-    SmallPtrSet<const MachineBasicBlock *, 16> FreshBlocks;
-    LS.getMachineBasicBlocks(DILoc, FreshBlocks);
-    BlocksToExplore.insert_range(FreshBlocks);
-    auto &Stored = ScopeBlocksCache[DILoc];
-    Stored.assign(FreshBlocks.begin(), FreshBlocks.end());
+    return;
   }
+
+  SmallPtrSet<const MachineBasicBlock *, 16> FreshBlocks;
+  LS.getMachineBasicBlocks(DILoc, FreshBlocks);
+  BlocksToExplore.insert_range(FreshBlocks);
 
   // VarLoc LiveDebugValues tracks variable locations that are defined in
   // blocks not in scope. This is something we could legitimately ignore, but
@@ -3163,6 +3164,10 @@ void InstrRefBasedLDV::getBlocksForScope(
   };
 
   BlocksToExplore.insert_range(ToAdd);
+
+  // Cache the expanded set for the later queries of this scope.
+  auto &Stored = ScopeBlocksCache[DILoc];
+  Stored.assign(BlocksToExplore.begin(), BlocksToExplore.end());
 }
 
 void InstrRefBasedLDV::buildVLocValueMap(
