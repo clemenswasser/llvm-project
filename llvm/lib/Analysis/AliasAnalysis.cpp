@@ -73,7 +73,8 @@ static const bool EnableAATrace = false;
 AAResults::AAResults(const TargetLibraryInfo &TLI) : TLI(TLI) {}
 
 AAResults::AAResults(AAResults &&Arg)
-    : TLI(Arg.TLI), AAs(std::move(Arg.AAs)), AADeps(std::move(Arg.AADeps)) {}
+    : TLI(Arg.TLI), Allocator(std::move(Arg.Allocator)),
+      AAs(std::move(Arg.AAs)), AADeps(std::move(Arg.AADeps)) {}
 
 AAResults::~AAResults() = default;
 
