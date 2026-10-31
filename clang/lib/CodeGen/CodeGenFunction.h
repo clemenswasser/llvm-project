@@ -1141,7 +1141,9 @@ public:
     void rescopeLabels();
   };
 
-  typedef llvm::DenseMap<const Decl *, Address> DeclMapTy;
+  // Most functions have only a handful of locals; keep their mappings
+  // inline instead of allocating a DenseMap bucket array per function.
+  typedef llvm::SmallDenseMap<const Decl *, Address, 8> DeclMapTy;
 
   /// The class used to assign some variables some temporarily addresses.
   class OMPMapVars {
