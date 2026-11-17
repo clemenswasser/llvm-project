@@ -1137,8 +1137,51 @@ const char *SourceManager::getCharacterData(SourceLocation SL,
 
 /// getColumnNumber - Return the column # for the specified file position.
 /// this is significantly cheaper to compute than the line number.
+/// If the last getLineNumber query was for \p FID and found the line
+/// containing \p FilePos, compute the column from that line's start offset.
+/// Returns 0 if the cached line does not apply.
+static unsigned columnInLastQueriedLine(const ContentCache &Content,
+                                        unsigned LastLineNo, const char *Buf,
+                                        unsigned FilePos) {
+  if (!Content.SourceLineCache || LastLineNo >= Content.SourceLineCache.size())
+    return 0;
+  const unsigned *SourceLineCache = Content.SourceLineCache.begin();
+  unsigned LineStart = SourceLineCache[LastLineNo - 1];
+  unsigned LineEnd = SourceLineCache[LastLineNo];
+  if (FilePos < LineStart || FilePos >= LineEnd)
+    return 0;
+  // LineEnd is the LineStart of the next line.
+  // A line ends with separator LF or CR+LF on Windows.
+  // FilePos might point to the last separator,
+  // but we need a column number at most 1 + the last column.
+  if (FilePos + 1 == LineEnd && FilePos > LineStart) {
+    if (Buf[FilePos - 1] == '\r' || Buf[FilePos - 1] == '\n')
+      --FilePos;
+  }
+  return (FilePos - LineStart) + 1;
+}
+
 unsigned SourceManager::getColumnNumber(FileID FID, unsigned FilePos,
                                         bool *Invalid) const {
+  // See if we just calculated the line number for this FilePos and can use
+  // that to lookup the start of the line instead of searching for it. This is
+  // the common case (getPresumedLoc computes the line first), so try it before
+  // looking up the buffer: the line table was computed from the loaded buffer
+  // of the same content cache, and a position within a cached line is within
+  // that buffer.
+  if (LastLineNoFileIDQuery == FID && !LastLineNoContentCache->IsBufferInvalid) {
+    if (std::optional<StringRef> Data =
+            LastLineNoContentCache->getBufferDataIfLoaded()) {
+      if (unsigned Col = columnInLastQueriedLine(
+              *LastLineNoContentCache, LastLineNoResult, Data->data(),
+              FilePos)) {
+        if (Invalid)
+          *Invalid = false;
+        return Col;
+      }
+    }
+  }
+
   std::optional<llvm::MemoryBufferRef> MemBuf = getBufferOrNone(FID);
   if (Invalid)
     *Invalid = !MemBuf;
@@ -1154,26 +1197,10 @@ unsigned SourceManager::getColumnNumber(FileID FID, unsigned FilePos,
   }
 
   const char *Buf = MemBuf->getBufferStart();
-  // See if we just calculated the line number for this FilePos and can use
-  // that to lookup the start of the line instead of searching for it.
-  if (LastLineNoFileIDQuery == FID && LastLineNoContentCache->SourceLineCache &&
-      LastLineNoResult < LastLineNoContentCache->SourceLineCache.size()) {
-    const unsigned *SourceLineCache =
-        LastLineNoContentCache->SourceLineCache.begin();
-    unsigned LineStart = SourceLineCache[LastLineNoResult - 1];
-    unsigned LineEnd = SourceLineCache[LastLineNoResult];
-    if (FilePos >= LineStart && FilePos < LineEnd) {
-      // LineEnd is the LineStart of the next line.
-      // A line ends with separator LF or CR+LF on Windows.
-      // FilePos might point to the last separator,
-      // but we need a column number at most 1 + the last column.
-      if (FilePos + 1 == LineEnd && FilePos > LineStart) {
-        if (Buf[FilePos - 1] == '\r' || Buf[FilePos - 1] == '\n')
-          --FilePos;
-      }
-      return (FilePos - LineStart) + 1;
-    }
-  }
+  if (LastLineNoFileIDQuery == FID)
+    if (unsigned Col = columnInLastQueriedLine(*LastLineNoContentCache,
+                                               LastLineNoResult, Buf, FilePos))
+      return Col;
 
   unsigned LineStart = FilePos;
   while (LineStart && Buf[LineStart-1] != '\n' && Buf[LineStart-1] != '\r')
