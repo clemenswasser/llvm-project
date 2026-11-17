@@ -5360,6 +5360,14 @@ void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc) {
     return;
 
   llvm::MDNode *Scope = LexicalBlockStack.back();
+  // Consecutive expressions often share a location. If the builder already
+  // has exactly this location, uniquing would return the same node.
+  if (const llvm::DILocation *Cur = Builder.getCurrentDebugLocation().get())
+    if (Cur->getLine() == CurLocLine && Cur->getColumn() == CurLocColumn &&
+        Cur->getRawScope() == Scope && Cur->getRawInlinedAt() == CurInlinedAt &&
+        !Cur->isImplicitCode() && !Cur->getAtomGroup() &&
+        !Cur->getAtomRank() && !Cur->getRawIRLayers())
+      return;
   Builder.SetCurrentDebugLocation(llvm::DILocation::get(
       CGM.getLLVMContext(), CurLocLine, CurLocColumn, Scope, CurInlinedAt));
 }
