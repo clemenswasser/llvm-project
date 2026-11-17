@@ -57,6 +57,8 @@ static const char TimeTraceFileExtension[] = ".time-trace.json";
 // Per Thread instance
 static LLVM_THREAD_LOCAL TimeTraceProfiler *TimeTraceProfilerInstance = nullptr;
 
+std::atomic<bool> llvm::TimeTraceProfilerEnabled{false};
+
 TimeTraceProfiler *llvm::getTimeTraceProfilerInstance() {
   return TimeTraceProfilerInstance;
 }
@@ -393,8 +395,9 @@ struct llvm::TimeTraceProfiler {
 };
 
 bool llvm::isTimeTraceVerbose() {
-  return getTimeTraceProfilerInstance() &&
-         getTimeTraceProfilerInstance()->TimeTraceVerbose;
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return false;
+  return TimeTraceProfilerInstance && TimeTraceProfilerInstance->TimeTraceVerbose;
 }
 
 TimeTraceCompression llvm::inferTimeTraceCompressionFromPath(StringRef Path) {
@@ -410,6 +413,7 @@ void llvm::timeTraceProfilerInitialize(unsigned TimeTraceGranularity,
                                        TimeTraceCompression TimeTraceCompress) {
   assert(TimeTraceProfilerInstance == nullptr &&
          "Profiler should not be initialized");
+  TimeTraceProfilerEnabled.store(true, std::memory_order_relaxed);
   TimeTraceProfilerInstance = new TimeTraceProfiler(
       TimeTraceGranularity, llvm::sys::path::filename(ProcName),
       TimeTraceVerbose, TimeTraceCompress);
@@ -418,6 +422,7 @@ void llvm::timeTraceProfilerInitialize(unsigned TimeTraceGranularity,
 // Removes all TimeTraceProfilerInstances.
 // Called from main thread.
 void llvm::timeTraceProfilerCleanup() {
+  TimeTraceProfilerEnabled.store(false, std::memory_order_relaxed);
   delete TimeTraceProfilerInstance;
   TimeTraceProfilerInstance = nullptr;
 
@@ -507,6 +512,8 @@ Error llvm::timeTraceProfilerWrite(StringRef PreferredFileName,
 
 TimeTraceProfilerEntry *llvm::timeTraceProfilerBegin(StringRef Name,
                                                      StringRef Detail) {
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return nullptr;
   if (TimeTraceProfilerInstance != nullptr)
     return TimeTraceProfilerInstance->begin(
         std::string(Name), [&]() { return std::string(Detail); },
@@ -517,6 +524,8 @@ TimeTraceProfilerEntry *llvm::timeTraceProfilerBegin(StringRef Name,
 TimeTraceProfilerEntry *
 llvm::timeTraceProfilerBegin(StringRef Name,
                              llvm::function_ref<std::string()> Detail) {
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return nullptr;
   if (TimeTraceProfilerInstance != nullptr)
     return TimeTraceProfilerInstance->begin(std::string(Name), Detail,
                                             TimeTraceEventType::CompleteEvent);
@@ -526,6 +535,8 @@ llvm::timeTraceProfilerBegin(StringRef Name,
 TimeTraceProfilerEntry *
 llvm::timeTraceProfilerBegin(StringRef Name,
                              llvm::function_ref<TimeTraceMetadata()> Metadata) {
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return nullptr;
   if (TimeTraceProfilerInstance != nullptr)
     return TimeTraceProfilerInstance->begin(std::string(Name), Metadata,
                                             TimeTraceEventType::CompleteEvent);
@@ -534,6 +545,8 @@ llvm::timeTraceProfilerBegin(StringRef Name,
 
 TimeTraceProfilerEntry *llvm::timeTraceAsyncProfilerBegin(StringRef Name,
                                                           StringRef Detail) {
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return nullptr;
   if (TimeTraceProfilerInstance != nullptr)
     return TimeTraceProfilerInstance->begin(
         std::string(Name), [&]() { return std::string(Detail); },
@@ -543,6 +556,8 @@ TimeTraceProfilerEntry *llvm::timeTraceAsyncProfilerBegin(StringRef Name,
 
 void llvm::timeTraceAddInstantEvent(StringRef Name,
                                     llvm::function_ref<std::string()> Detail) {
+  if (!TimeTraceProfilerEnabled.load(std::memory_order_relaxed))
+    return;
   if (TimeTraceProfilerInstance != nullptr)
     TimeTraceProfilerInstance->insert(std::string(Name), Detail);
 }

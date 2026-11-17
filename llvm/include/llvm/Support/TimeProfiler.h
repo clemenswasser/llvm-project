@@ -80,6 +80,8 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Error.h"
 
+#include <atomic>
+
 namespace llvm {
 
 class raw_pwrite_stream;
@@ -187,10 +189,19 @@ timeTraceAddInstantEvent(StringRef Name,
 LLVM_ABI void timeTraceProfilerEnd();
 LLVM_ABI void timeTraceProfilerEnd(TimeTraceProfilerEntry *E);
 
+/// True while a time trace profiler is active in this process.
+///
+/// Tracing is off unless -ftime-trace was passed, and the helpers below sit on
+/// hot paths (every pass invocation, every Sema entry point), so they test this
+/// flag here, inline. The profiler instance itself is thread-local, and reading
+/// it from a shared library costs a __tls_get_addr call on every event, enabled
+/// or not.
+LLVM_ABI extern std::atomic<bool> TimeTraceProfilerEnabled;
+
 /// The TimeTraceScope is a helper class to call the begin and end functions
 /// of the time trace profiler.  When the object is constructed, it begins
 /// the section; and when it is destroyed, it stops it. If the time profiler
-/// is not initialized, the overhead is a single branch.
+/// is not initialized, the overhead is a single relaxed load and branch.
 class [[nodiscard]] TimeTraceScope {
 public:
   TimeTraceScope() = delete;
@@ -200,14 +211,22 @@ public:
   TimeTraceScope &operator=(TimeTraceScope &&) = delete;
 
   TimeTraceScope(StringRef Name)
-      : Entry(timeTraceProfilerBegin(Name, StringRef())) {}
+      : Entry(TimeTraceProfilerEnabled.load(std::memory_order_relaxed)
+                  ? timeTraceProfilerBegin(Name, StringRef())
+                  : nullptr) {}
   TimeTraceScope(StringRef Name, StringRef Detail)
-      : Entry(timeTraceProfilerBegin(Name, Detail)) {}
+      : Entry(TimeTraceProfilerEnabled.load(std::memory_order_relaxed)
+                  ? timeTraceProfilerBegin(Name, Detail)
+                  : nullptr) {}
   TimeTraceScope(StringRef Name, llvm::function_ref<std::string()> Detail)
-      : Entry(timeTraceProfilerBegin(Name, Detail)) {}
+      : Entry(TimeTraceProfilerEnabled.load(std::memory_order_relaxed)
+                  ? timeTraceProfilerBegin(Name, Detail)
+                  : nullptr) {}
   TimeTraceScope(StringRef Name,
                  llvm::function_ref<TimeTraceMetadata()> Metadata)
-      : Entry(timeTraceProfilerBegin(Name, Metadata)) {}
+      : Entry(TimeTraceProfilerEnabled.load(std::memory_order_relaxed)
+                  ? timeTraceProfilerBegin(Name, Metadata)
+                  : nullptr) {}
   ~TimeTraceScope() {
     if (Entry)
       timeTraceProfilerEnd(Entry);
