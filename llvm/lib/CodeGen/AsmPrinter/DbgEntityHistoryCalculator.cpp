@@ -336,8 +336,12 @@ static void clobberRegEntries(InlinedEntity Var, Register Reg,
   // If a given register appears in a live DBG_VALUE_LIST for Var alongside the
   // clobbered register, and never appears in a live DBG_VALUE* for Var without
   // the clobbered register, then it is no longer linked to the variable.
-  SmallSet<Register, 4> MaybeRemovedRegisters;
-  SmallSet<Register, 4> KeepRegisters;
+  // These hold a handful of registers. SmallSet falls back to std::set as soon
+  // as a DBG_VALUE_LIST has more than four register operands, which turns a
+  // per-clobber check into heap allocations; a vector with a linear scan is
+  // cheaper for the sizes involved.
+  SmallVector<Register, 4> MaybeRemovedRegisters;
+  SmallVector<Register, 4> KeepRegisters;
   for (auto Index : LiveEntries[Var]) {
     auto &Entry = HistMap.getEntry(Var, Index);
     assert(Entry.isDbgValue() && "Not a DBG_VALUE in LiveEntries");
@@ -348,16 +352,18 @@ static void clobberRegEntries(InlinedEntity Var, Register Reg,
       Entry.endEntry(ClobberIndex);
       for (const auto &MO : Entry.getInstr()->debug_operands())
         if (MO.isReg() && MO.getReg() && MO.getReg() != Reg)
-          MaybeRemovedRegisters.insert(MO.getReg());
+          if (!is_contained(MaybeRemovedRegisters, MO.getReg()))
+            MaybeRemovedRegisters.push_back(MO.getReg());
     } else {
       for (const auto &MO : Entry.getInstr()->debug_operands())
         if (MO.isReg() && MO.getReg())
-          KeepRegisters.insert(MO.getReg());
+          if (!is_contained(KeepRegisters, MO.getReg()))
+            KeepRegisters.push_back(MO.getReg());
     }
   }
 
   for (Register Reg : MaybeRemovedRegisters)
-    if (!KeepRegisters.contains(Reg))
+    if (!is_contained(KeepRegisters, Reg))
       FellowRegisters.push_back(Reg);
 
   // Drop all entries that have ended.

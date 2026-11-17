@@ -113,6 +113,7 @@
 #include "LiveDebugValues.h"
 
 #include "llvm/ADT/CoalescingBitVector.h"
+#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -180,9 +181,12 @@ static bool isRegOtherThanSPAndFP(const MachineOperand &Op,
 
 namespace {
 
-// Max out the number of statically allocated elements in DefinedRegsSet, as
-// this prevents fallback to std::set::count() operations.
-using DefinedRegsSet = SmallSet<Register, 32>;
+// Registers are dense ids below TRI::getNumRegs(), and the set is only asked
+// "was this register defined in the entry block?". A bit vector makes the
+// insert O(1); the SmallSet it replaces linearly scanned up to 32 entries and
+// fell back to std::set beyond that, which the alias iterator below reaches
+// quickly (every def inserts all of its aliases).
+using DefinedRegsSet = BitVector;
 
 // The IDs in this set correspond to MachineLocs in VarLocs, as well as VarLocs
 // that represent Entry Values; every VarLoc in the set will also appear
@@ -2185,7 +2189,7 @@ bool VarLocBasedLDV::isEntryValueCandidate(
   // parameter's DBG_VALUE may be described using a register defined by some
   // instruction in the entry block, in which case we shouldn't create an
   // entry value.
-  if (DefinedRegs.count(MI.getDebugOperand(0).getReg()))
+  if (DefinedRegs.test(MI.getDebugOperand(0).getReg()))
     return false;
 
   // TODO: Add support for parameters that have a pre-existing debug expressions
@@ -2203,9 +2207,9 @@ static void collectRegDefs(const MachineInstr &MI, DefinedRegsSet &Regs,
                            const TargetRegisterInfo *TRI) {
   for (const MachineOperand &MO : MI.all_defs()) {
     if (MO.getReg() && MO.getReg().isPhysical()) {
-      Regs.insert(MO.getReg());
+      Regs.set(MO.getReg());
       for (MCRegAliasIterator AI(MO.getReg(), TRI, true); AI.isValid(); ++AI)
-        Regs.insert(*AI);
+        Regs.set(*AI);
     }
   }
 }
@@ -2300,6 +2304,7 @@ bool VarLocBasedLDV::ExtendRanges(MachineFunction &MF,
   // Set of register defines that are seen when traversing the entry block
   // looking for debug entry value candidates.
   DefinedRegsSet DefinedRegs;
+  DefinedRegs.resize(TRI->getNumRegs());
 
   // Only in the case of entry MBB collect DBG_VALUEs representing
   // function parameters in order to generate debug entry values for them.
