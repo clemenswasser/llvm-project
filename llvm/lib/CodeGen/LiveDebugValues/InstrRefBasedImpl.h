@@ -230,16 +230,23 @@ namespace LiveDebugValues {
 using namespace llvm;
 
 /// Type for a table of values in a block.
-using ValueTable = SmallVector<ValueIDNum, 0>;
+using ValueTable = MutableArrayRef<ValueIDNum>;
 
 /// A collection of ValueTables, one per BB in a function, with convenient
 /// accessor methods.
+///
+/// The rows live in one allocation: the tables are created for every block up
+/// front and the dataflow touches all of them, so per-block heap nodes only
+/// added allocator traffic (one malloc per block per table, twice per
+/// function). Rows are no longer freed as the emit phase walks past a block;
+/// peak memory is unchanged because every row exists from construction.
 struct FuncValueTable {
-  FuncValueTable(int NumBBs, int NumLocs) {
+  FuncValueTable(int NumBBs, int NumLocs) : Live(NumBBs, true) {
+    Data.resize(size_t(NumBBs) * size_t(NumLocs), ValueIDNum::EmptyValue);
     Storage.reserve(NumBBs);
     for (int i = 0; i != NumBBs; ++i)
-      Storage.push_back(
-          std::make_unique<ValueTable>(NumLocs, ValueIDNum::EmptyValue));
+      Storage.push_back(MutableArrayRef<ValueIDNum>(
+          Data.data() + size_t(i) * size_t(NumLocs), size_t(NumLocs)));
   }
 
   /// Returns the ValueTable associated with MBB.
@@ -250,9 +257,8 @@ struct FuncValueTable {
   /// Returns the ValueTable associated with the MachineBasicBlock whose number
   /// is MBBNum.
   ValueTable &operator[](int MBBNum) const {
-    auto &TablePtr = Storage[MBBNum];
-    assert(TablePtr && "Trying to access a deleted table");
-    return *TablePtr;
+    assert(MBBNum < (int)Storage.size() && "Trying to access a deleted table");
+    return Storage[MBBNum];
   }
 
   /// Returns the ValueTable associated with the entry MachineBasicBlock.
@@ -260,19 +266,25 @@ struct FuncValueTable {
 
   /// Returns true if the ValueTable associated with MBB has not been freed.
   bool hasTableFor(MachineBasicBlock &MBB) const {
-    return Storage[MBB.getNumber()] != nullptr;
+    int Num = MBB.getNumber();
+    return Num >= 0 && Num < (int)Live.size() && Live[Num];
   }
 
-  /// Frees the memory of the ValueTable associated with MBB.
-  void ejectTableForBlock(const MachineBasicBlock &MBB) {
-    Storage[MBB.getNumber()].reset();
+  /// Every row shares one allocation, so record the eject instead of freeing.
+  void ejectTableForBlock(const MachineBasicBlock &MBB) const {
+    int Num = MBB.getNumber();
+    if (Num >= 0 && Num < (int)Live.size())
+      Live[Num] = false;
   }
 
 private:
-  /// ValueTables are stored as unique_ptrs to allow for deallocation during
-  /// LDV; this was measured to have a significant impact on compiler memory
-  /// usage.
-  SmallVector<std::unique_ptr<ValueTable>, 0> Storage;
+  // Mutable so that the const accessors can hand out a mutable row, as the
+  // unique_ptr-based storage did before.
+  mutable SmallVector<ValueTable, 0> Storage;
+  SmallVector<ValueIDNum, 0> Data;
+  /// Whether a block's row is still live; ejecting used to free the row, and
+  /// the emit phase relies on that state to avoid ejecting a block twice.
+  mutable SmallVector<bool, 0> Live;
 };
 
 /// Thin wrapper around an integer -- designed to give more type safety to

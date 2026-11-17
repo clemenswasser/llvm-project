@@ -3812,17 +3812,41 @@ bool InstrRefBasedLDV::ExtendRanges(MachineFunction &MF,
 
   // Walk back through each block / instruction, collecting DBG_VALUE
   // instructions and recording what machine value their operands refer to.
+  //
+  // This scan only needs the machine tracker's running value state for
+  // DBG_VALUEs that describe a register (transferDebugValue reads the value
+  // number of each register operand). Everything else resolves from the
+  // precomputed machine-value tables: DBG_INSTR_REFs are encoded as
+  // (block, instruction, location) by getValueForInstrRef, PHIs are resolved
+  // by resolveDbgPHIs, and the register-to-location mapping was completed by
+  // produceMLocTransferFunction. Blocks without such a DBG_VALUE therefore
+  // skip the per-instruction machine tracking entirely.
+  auto NeedsMachineState = [](const MachineBasicBlock &MBB) {
+    for (const MachineInstr &MI : MBB) {
+      if (!MI.isDebugValue())
+        continue;
+      for (const MachineOperand &MO : MI.debug_operands())
+        if (MO.isReg() && MO.getReg())
+          return true;
+    }
+    return false;
+  };
+
   for (MachineBasicBlock *MBB : OrderToBB) {
     CurBB = MBB->getNumber();
     VTracker = &vlocs[CurBB];
     VTracker->MBB = MBB;
-    MTracker->loadFromArray(MInLocs[*MBB], CurBB);
+    const bool TrackMachineState = NeedsMachineState(*MBB);
+    if (TrackMachineState)
+      MTracker->loadFromArray(MInLocs[*MBB], CurBB);
     CurInst = 1;
     for (auto &MI : *MBB) {
-      process(MI, &MOutLocs, &MInLocs);
+      if (TrackMachineState || MI.isDebugInstr())
+        process(MI, &MOutLocs, &MInLocs);
       ++CurInst;
     }
-    MTracker->reset();
+    if (TrackMachineState)
+      MTracker->reset();
   }
 
   // Map from one LexicalScope to all the variables in that scope.
