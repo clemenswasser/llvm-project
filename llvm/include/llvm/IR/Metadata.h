@@ -1199,6 +1199,20 @@ protected:
   LLVM_ABI void *operator new(size_t Size, size_t NumOps, StorageType Storage);
   LLVM_ABI void operator delete(void *Mem);
 
+  /// Allocate storage for a DILocation with \p NumOps operands and a node of
+  /// \p Size bytes from the context's slab, reusing a freed block when one is
+  /// available. DILocations are created once per source position and almost
+  /// never deleted before the context dies, so recycling their storage here
+  /// avoids a general-purpose allocation per node.
+  LLVM_ABI static void *allocateDILocationStorage(LLVMContext &Context,
+                                                  size_t Size, size_t NumOps,
+                                                  StorageType Storage);
+
+  /// Return storage obtained from allocateDILocationStorage to the context.
+  /// The caller must already have destroyed the node.
+  LLVM_ABI static void deallocateDILocationStorage(LLVMContext &Context,
+                                                   void *N);
+
   /// Required by std, but never called.
   void operator delete(void *, unsigned) {
     llvm_unreachable("Constructor throws?");

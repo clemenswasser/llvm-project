@@ -113,9 +113,12 @@ DILocation *DILocation::getImpl(LLVMContext &Context, unsigned Line,
     Ops.push_back(InlinedAt);
   if (IRLayers)
     Ops.push_back(IRLayers);
-  return storeImpl(new (Ops.size(), Storage) DILocation(
-                       Context, Storage, Line, Column, AtomGroup, AtomRank,
-                       /*HasIRLayers=*/IRLayers != nullptr, Ops, ImplicitCode),
+  void *Mem = allocateDILocationStorage(Context, sizeof(DILocation), Ops.size(),
+                                        Storage);
+  return storeImpl(::new (Mem) DILocation(Context, Storage, Line, Column,
+                                          AtomGroup, AtomRank,
+                                          /*HasIRLayers=*/IRLayers != nullptr,
+                                          Ops, ImplicitCode),
                    Storage, Context.pImpl->DILocations);
 }
 

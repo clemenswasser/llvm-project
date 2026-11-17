@@ -1719,6 +1719,14 @@ public:
   // Optional map for looking up composite types by identifier.
   std::optional<DenseMap<const MDString *, DICompositeType *>> DITypeMap;
 
+  // Storage for DILocation nodes. One is created per distinct source position
+  // in a TU (hundreds of thousands), they are almost never deleted before the
+  // context dies, and each has one of only four operand counts. Serving them
+  // from a bump allocator with a free list per operand count removes one
+  // general-purpose allocation per node; see MDNode::allocateDILocationStorage.
+  BumpPtrAllocator DILocationAlloc;
+  void *DILocationFree[4] = {};
+
   // MDNodes may be uniqued or not uniqued.  When they're not uniqued, they
   // aren't in the MDNodeSet, but they're still shared between objects, so no
   // one object can destroy them.  Keep track of them here so we can delete

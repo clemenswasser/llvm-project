@@ -98,7 +98,7 @@ LLVMContextImpl::~LLVMContextImpl() {
     ConstantRangeListAttribute->~ConstantRangeListAttributeImpl();
 #define HANDLE_MDNODE_LEAF_UNIQUABLE(CLASS)                                    \
   for (CLASS * I : CLASS##s)                                                   \
-    delete I;
+    I->deleteAsSubclass();
 #include "llvm/IR/Metadata.def"
 
   // Free the constants.

@@ -646,6 +646,41 @@ void MDNode::operator delete(void *N) {
   ::operator delete(Mem);
 }
 
+void *MDNode::allocateDILocationStorage(LLVMContext &Context, size_t Size,
+                                        size_t NumOps, StorageType Storage) {
+  // DILocation has at most three operands: scope, inlined-at and irlayers.
+  assert(NumOps < std::size(Context.pImpl->DILocationFree));
+  void *&Free = Context.pImpl->DILocationFree[NumOps];
+  if (Free) {
+    void *N = Free;
+    Free = *static_cast<void **>(N);
+    return N;
+  }
+
+  // The layout must match MDNode::operator new: operands, then the header at
+  // the end of the allocation, then the node itself. Distinct and temporary
+  // nodes reserve room for one vector's worth of operands when they have
+  // fewer, and blocks are recycled by operand count alone, so size every block
+  // for the larger of the two layouts.
+  size_t AllocSize = alignTo(std::max(Header::getAllocSize(Uniqued, NumOps),
+                                      Header::getAllocSize(Distinct, NumOps)),
+                             alignof(uint64_t));
+  char *Mem = static_cast<char *>(
+      Context.pImpl->DILocationAlloc.Allocate(AllocSize + Size,
+                                              alignof(uint64_t)));
+  Header *H = new (Mem + AllocSize - sizeof(Header)) Header(NumOps, Storage);
+  return reinterpret_cast<void *>(H + 1);
+}
+
+void MDNode::deallocateDILocationStorage(LLVMContext &Context, void *N) {
+  Header *H = reinterpret_cast<Header *>(N) - 1;
+  unsigned NumOps = H->getNumOperands();
+  H->~Header();
+  assert(NumOps < std::size(Context.pImpl->DILocationFree));
+  *static_cast<void **>(N) = Context.pImpl->DILocationFree[NumOps];
+  Context.pImpl->DILocationFree[NumOps] = N;
+}
+
 MDNode::MDNode(LLVMContext &Context, unsigned ID, StorageType Storage,
                ArrayRef<Metadata *> Ops1, ArrayRef<Metadata *> Ops2)
     : Metadata(ID, Storage), Context(Context) {
@@ -972,6 +1007,18 @@ void MDNode::deleteAsSubclass() {
     bool WasTracked = getContext().pImpl->TemporaryMDNodes.erase(this);
     assert(WasTracked && "Temporary node not tracked");
     (void)WasTracked;
+  }
+  // DILocations come from the context's slab rather than the general-purpose
+  // allocator, so return their storage instead of running the delete
+  // expression. A delete expression would look up DILocation's operator
+  // delete, but this runs before the node is destroyed, where the context is
+  // still available.
+  if (getMetadataID() == DILocationKind) {
+    auto *N = cast<DILocation>(this);
+    LLVMContext &Context = getContext();
+    N->~DILocation();
+    deallocateDILocationStorage(Context, N);
+    return;
   }
   switch (getMetadataID()) {
   default:
