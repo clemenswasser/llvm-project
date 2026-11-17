@@ -51,7 +51,20 @@ static const char *BugReportMsg =
 // objects, but we *really* cannot tolerate destructors running and do not want
 // to pay any overhead of synchronizing. As a consequence, we use a raw
 // thread-local variable.
-static LLVM_THREAD_LOCAL PrettyStackTraceEntry *PrettyStackTraceHead = nullptr;
+// The pass manager creates one of these per pass and per function, so the
+// access is hot. With the default general-dynamic TLS model in a shared
+// library each access is a __tls_get_addr call; initial-exec turns it into a
+// load from the thread pointer. libLLVM is loaded at process start, so the
+// slot is always available. Same rationale as the bundled rpmalloc.
+#if defined(__ELF__) && !defined(__HAIKU__) &&                               \
+    (defined(__clang__) || defined(__GNUC__))
+#define LLVM_PRETTY_STACK_TLS                                                  \
+  LLVM_THREAD_LOCAL __attribute__((tls_model("initial-exec")))
+#else
+#define LLVM_PRETTY_STACK_TLS LLVM_THREAD_LOCAL
+#endif
+static LLVM_PRETTY_STACK_TLS PrettyStackTraceEntry *PrettyStackTraceHead =
+    nullptr;
 
 // The use of 'volatile' here is to ensure that any particular thread always
 // reloads the value of the counter. The 'std::atomic' allows us to specify that

@@ -15,7 +15,16 @@
 #include "llvm/Support/CrashRecoveryContext.h"
 #include "llvm/Support/ProgramStack.h"
 
-static LLVM_THREAD_LOCAL uintptr_t BottomOfStack = 0;
+// Read on every stack-exhaustion check, which the parser and Sema reach per
+// recursive step; see PrettyStackTrace.cpp for why this is initial-exec.
+#if defined(__ELF__) && !defined(__HAIKU__) &&                               \
+    (defined(__clang__) || defined(__GNUC__))
+#define LLVM_STACK_TLS                                                         \
+  LLVM_THREAD_LOCAL __attribute__((tls_model("initial-exec")))
+#else
+#define LLVM_STACK_TLS LLVM_THREAD_LOCAL
+#endif
+static LLVM_STACK_TLS uintptr_t BottomOfStack = 0;
 
 void clang::noteBottomOfStack(bool ForceSet) {
   if (!BottomOfStack || ForceSet)

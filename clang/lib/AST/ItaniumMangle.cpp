@@ -204,9 +204,16 @@ public:
   NamespaceDecl *getStdNamespace();
 
   const DeclContext *getEffectiveDeclContext(const Decl *D);
+  const DeclContext *computeEffectiveDeclContext(const Decl *D);
   const DeclContext *getEffectiveParentContext(const DeclContext *DC) {
     return getEffectiveDeclContext(cast<Decl>(DC));
   }
+
+  /// Cache for getEffectiveDeclContext(). Mangling one name asks for the same
+  /// declaration contexts many times over (1.4M lookups for 30k mangled names
+  /// when compiling tramp3d-v4.cpp) and the answer is a pure function of the
+  /// declaration.
+  llvm::DenseMap<const Decl *, const DeclContext *> EffectiveDeclContexts;
 
   bool isInternalLinkageDecl(const NamedDecl *ND);
 
@@ -652,6 +659,16 @@ static const CXXRecordDecl *getLambdaForInitCapture(const VarDecl *VD) {
 /// declaration.
 const DeclContext *
 ItaniumMangleContextImpl::getEffectiveDeclContext(const Decl *D) {
+  auto It = EffectiveDeclContexts.find(D);
+  if (It != EffectiveDeclContexts.end())
+    return It->second;
+  const DeclContext *Result = computeEffectiveDeclContext(D);
+  EffectiveDeclContexts.insert({D, Result});
+  return Result;
+}
+
+const DeclContext *
+ItaniumMangleContextImpl::computeEffectiveDeclContext(const Decl *D) {
   // The ABI assumes that lambda closure types that occur within
   // default arguments live in the context of the function. However, due to
   // the way in which Clang parses and creates function declarations, this is
