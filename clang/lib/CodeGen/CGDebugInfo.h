@@ -778,6 +778,12 @@ private:
   /// location.
   llvm::DIFile *getOrCreateFile(SourceLocation Loc);
 
+  /// Get the file debug info descriptor for \p Loc given its presumed
+  /// location \p PLoc. \p Loc must be invalid or a location for which
+  /// getMacroDebugLoc is the identity, and \p PLoc must be
+  /// SourceManager::getPresumedLoc(Loc).
+  llvm::DIFile *getOrCreateFile(SourceLocation Loc, const PresumedLoc &PLoc);
+
   /// Create a file debug info descriptor for a source file.
   llvm::DIFile *
   createFile(StringRef FileName,
