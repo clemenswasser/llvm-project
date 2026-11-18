@@ -1936,6 +1936,11 @@ ModulePassManager PassBuilder::buildThinLTOPostImportNoImportsPipeline(
   if (!ImportSummary.withSupportsHotColdNew())
     MPM.addPass(MemProfRemoveInfo());
   MPM.addPass(WholeProgramDevirtPass(nullptr, &ImportSummary));
+  // The simplification pipeline we skip also runs the coroutine lowering and
+  // type-test lowering for optimized ThinLTO; keep those, they are required
+  // for codegen.
+  MPM.addPass(LowerTypeTestsPass(nullptr, &ImportSummary));
+  MPM.addPass(buildCoroWrapper(ThinOrFullLTOPhase::ThinLTOPostLink));
   MPM.addPass(
       buildModuleOptimizationPipeline(Level, ThinOrFullLTOPhase::ThinLTOPostLink));
   invokeThinLinkTimeOptimizationLastEPCallbacks(MPM, Level);
