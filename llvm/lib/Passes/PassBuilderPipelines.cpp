@@ -1928,6 +1928,22 @@ ModulePassManager PassBuilder::buildThinLTODefaultPipeline(
   return MPM;
 }
 
+ModulePassManager PassBuilder::buildThinLTOPostImportNoImportsPipeline(
+    OptimizationLevel Level, const ModuleSummaryIndex &ImportSummary) {
+  ModulePassManager MPM;
+  addPipelineStartPasses(MPM, Opts);
+  invokeThinLinkTimeOptimizationEarlyEPCallbacks(MPM, Level);
+  if (!ImportSummary.withSupportsHotColdNew())
+    MPM.addPass(MemProfRemoveInfo());
+  MPM.addPass(WholeProgramDevirtPass(nullptr, &ImportSummary));
+  MPM.addPass(
+      buildModuleOptimizationPipeline(Level, ThinOrFullLTOPhase::ThinLTOPostLink));
+  invokeThinLinkTimeOptimizationLastEPCallbacks(MPM, Level);
+  addAnnotationRemarksPass(MPM);
+  addPipelineEndPasses(MPM, Opts);
+  return MPM;
+}
+
 ModulePassManager
 PassBuilder::buildLTOPreLinkDefaultPipeline(OptimizationLevel Level) {
   // FIXME: We should use a customized pre-link pipeline!

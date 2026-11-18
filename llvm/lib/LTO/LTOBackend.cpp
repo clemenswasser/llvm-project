@@ -372,7 +372,11 @@ static void runNewPMPasses(const Config &Conf, Module &Mod, TargetMachine *TM,
                          Conf.OptPipeline + "': " + toString(std::move(Err)));
     }
   } else if (IsThinLTO) {
-    MPM.addPass(PB.buildThinLTODefaultPipeline(OL, ImportSummary));
+    if (ImportSummary && OL != OptimizationLevel::O0 &&
+        Mod.getModuleFlag("ThinLTOPostImportNoImports"))
+      MPM.addPass(PB.buildThinLTOPostImportNoImportsPipeline(OL, *ImportSummary));
+    else
+      MPM.addPass(PB.buildThinLTODefaultPipeline(OL, ImportSummary));
   } else {
     MPM.addPass(PB.buildLTODefaultPipeline(OL, ExportSummary));
   }

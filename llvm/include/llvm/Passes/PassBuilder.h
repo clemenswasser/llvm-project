@@ -308,6 +308,13 @@ public:
   LLVM_ABI ModulePassManager buildThinLTODefaultPipeline(
       OptimizationLevel Level, const ModuleSummaryIndex *ImportSummary);
 
+  /// Build a reduced ThinLTO post-import pipeline for a module that imported
+  /// nothing: the pre-link pipeline already ran the simplification passes, so
+  /// keep only the optimization passes that affect codegen quality
+  /// (vectorization, unrolling) and the required lowering.
+  LLVM_ABI ModulePassManager buildThinLTOPostImportNoImportsPipeline(
+      OptimizationLevel Level, const ModuleSummaryIndex &ImportSummary);
+
   /// Build a pre-link, LTO-targeting default optimization pipeline to a pass
   /// manager.
   ///
