@@ -640,6 +640,11 @@ Error lto::thinBackend(const Config &Conf, unsigned Task, AddStreamFn AddStream,
                        AddStreamFn IRAddStream,
                        const std::vector<uint8_t> &CmdArgs) {
   llvm::TimeTraceScope timeScope("Thin backend", Mod.getModuleIdentifier());
+  // A single-module ThinLTO link has no imports: the pre-link pipeline already
+  // optimized this module, so the post-import InstCombine would only re-scan
+  // unchanged functions. Mark the module so the pass can skip that run.
+  if (ImportList.begin() == ImportList.end())
+    Mod.addModuleFlag(Module::Warning, "ThinLTOPostImportNoImports", 1);
   Expected<const Target *> TOrErr = initAndLookupTarget(Conf, Mod);
   if (!TOrErr)
     return TOrErr.takeError();

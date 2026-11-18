@@ -6363,6 +6363,10 @@ char InstCombinePass::ID = 0;
 
 PreservedAnalyses InstCombinePass::run(Function &F,
                                        FunctionAnalysisManager &AM) {
+  // In a no-import ThinLTO backend the module was already optimized by the
+  // pre-link pipeline; this run would re-scan unchanged functions.
+  if (F.getParent()->getModuleFlag("ThinLTOPostImportNoImports"))
+    return PreservedAnalyses::all();
   auto &LRT = AM.getResult<LastRunTrackingAnalysis>(F);
   // No changes since last InstCombine pass, exit early.
   if (LRT.shouldSkip(&ID))
