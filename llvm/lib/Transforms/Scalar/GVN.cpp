@@ -109,6 +109,12 @@ STATISTIC(MaxBBSpeculationCutoffReachedTimes,
           "Number of times we we reached gvn-max-block-speculations cut-off "
           "preventing further exploration");
 
+static cl::opt<unsigned> MaxNonLocalBlockVisits(
+    "gvn-max-nonlocal-block-visits", cl::Hidden, cl::init(500),
+    cl::desc("Max basic blocks visited by non-local load dependency queries "
+             "per function (default = 500). Once the budget is spent the "
+             "remaining loads are left in place, which is conservative."));
+
 struct llvm::GVNValueTable::Expression {
   uint32_t Opcode;
   bool Commutative = false;
@@ -3864,6 +3870,18 @@ bool GVNPassImpl::run(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   AA = &RunAA;
   VN.setAliasAnalysis(&RunAA);
   MD = RunMD;
+  // Bound the work this function can spend in MemDep's non-local load walks.
+  // The budget is per function and is restored when this pass returns, so
+  // other users of the cached analysis are unaffected.
+  struct NonLocalBudgetScope {
+    MemoryDependenceResults *MD;
+    ~NonLocalBudgetScope() {
+      if (MD)
+        MD->setNonLocalBlockBudget(~0U);
+    }
+  } BudgetScope{RunMD};
+  if (RunMD)
+    RunMD->setNonLocalBlockBudget(MaxNonLocalBlockVisits);
   ImplicitControlFlowTracking ImplicitCFT;
   ICF = &ImplicitCFT;
   this->LI = &LI;

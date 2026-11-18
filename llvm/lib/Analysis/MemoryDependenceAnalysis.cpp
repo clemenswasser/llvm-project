@@ -1134,6 +1134,16 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
     return true;
   }
 
+  // Stop once this function's budget of visited blocks is spent. Returning
+  // false makes the caller treat the query as unknown, which is conservative:
+  // it leaves the load in place. Mark the cache incomplete so later queries do
+  // not reuse a partial traversal as a complete result.
+  if (NonLocalBlocksVisited >= NonLocalBlockBudget) {
+    CacheInfo->Pair = BBSkipFirstBlockPair();
+    return false;
+  }
+  ++NonLocalBlocksVisited;
+
   // If the size of this cache has surpassed the global limit, stop here.
   if (Cache->size() > Opts.memdep_cache_global_limit)
     return false;

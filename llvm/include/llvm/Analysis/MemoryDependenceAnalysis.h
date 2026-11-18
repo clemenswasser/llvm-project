@@ -387,6 +387,11 @@ private:
 
   unsigned DefaultBlockScanLimit;
 
+  /// Budget and counter for blocks visited by non-local pointer queries in the
+  /// current function. The default budget is unlimited.
+  unsigned NonLocalBlockBudget = ~0U;
+  unsigned NonLocalBlocksVisited = 0;
+
   /// Offsets to dependant clobber loads.
   using ClobberOffsetsMapType = DenseMap<LoadInst *, int32_t>;
   ClobberOffsetsMapType ClobberOffsets;
@@ -405,6 +410,15 @@ public:
   /// The return value of this method is the default limit that will be
   /// used if no limit is explicitly passed in.
   LLVM_ABI unsigned getDefaultBlockScanLimit() const;
+
+  /// Set the budget of basic blocks that non-local pointer dependency queries
+  /// may visit for the current function, and reset the visited counter.
+  /// Queries that would exceed the budget conservatively report an unknown
+  /// dependency, which leaves the queried load in place.
+  void setNonLocalBlockBudget(unsigned Budget) {
+    NonLocalBlockBudget = Budget;
+    NonLocalBlocksVisited = 0;
+  }
 
   /// Returns the instruction on which a memory operation depends.
   ///
