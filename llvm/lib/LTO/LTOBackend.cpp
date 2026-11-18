@@ -770,6 +770,31 @@ Error lto::thinBackend(const Config &Conf, unsigned Task, AddStreamFn AddStream,
   // Do this after any importing so that imported code is updated.
   updatePublicTypeTestCalls(Mod, CombinedIndex.withWholeProgramVisibility());
 
+  // For modules that did import, mark the functions the importer/inliner
+  // cannot change: they call no imported function. Build the dirty set from
+  // the imported functions' users instead of scanning every instruction.
+  if (ImportList.begin() != ImportList.end()) {
+    SmallPtrSet<const Function *, 16> Dirty;
+    SmallVector<const Function *, 16> Imported;
+    for (Function &F : Mod)
+      if (F.hasAvailableExternallyLinkage()) {
+        Dirty.insert(&F);
+        Imported.push_back(&F);
+      }
+    for (const Function *F : Imported) {
+      for (const User *U : F->users()) {
+        const auto *CB = dyn_cast<CallBase>(U);
+        if (!CB)
+          continue;
+        if (const Function *Caller = CB->getFunction())
+          Dirty.insert(Caller);
+      }
+    }
+    for (Function &F : Mod)
+      if (!F.isDeclaration() && !Dirty.count(&F))
+        F.addFnAttr("thinlto-clean-opt");
+  }
+
   if (Conf.PostImportModuleHook && !Conf.PostImportModuleHook(Task, Mod))
     return finalizeOptimizationRemarks(std::move(DiagnosticOutputFile));
 

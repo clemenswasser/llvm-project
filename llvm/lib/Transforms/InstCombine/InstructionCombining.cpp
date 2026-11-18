@@ -6364,8 +6364,11 @@ char InstCombinePass::ID = 0;
 PreservedAnalyses InstCombinePass::run(Function &F,
                                        FunctionAnalysisManager &AM) {
   // In a no-import ThinLTO backend the module was already optimized by the
-  // pre-link pipeline; this run would re-scan unchanged functions.
-  if (F.getParent()->getModuleFlag("ThinLTOPostImportNoImports"))
+  // pre-link pipeline; this run would re-scan unchanged functions. In a module
+  // that did import, the per-function attribute marks functions that call no
+  // imported function and therefore were not changed by the importer/inliner.
+  if (F.getParent()->getModuleFlag("ThinLTOPostImportNoImports") ||
+      F.hasFnAttribute("thinlto-clean-opt"))
     return PreservedAnalyses::all();
   auto &LRT = AM.getResult<LastRunTrackingAnalysis>(F);
   // No changes since last InstCombine pass, exit early.
